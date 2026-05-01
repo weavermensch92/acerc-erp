@@ -1,23 +1,14 @@
 import Link from 'next/link';
 import { Plus, X, Grid3x3, Download, Upload } from 'lucide-react';
 import { PageHeader } from '@/components/erp/PageHeader';
-import { Pill } from '@/components/erp/Pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from '@/components/ui/table';
 import { createClient } from '@/lib/supabase/server';
 import { getReviewProcessEnabled } from '@/lib/settings';
-import { formatKRW, formatKg, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { LogStatus, Direction } from '@/lib/types/database';
+import { LogsTable, type LogRow } from './_table';
+import type { LogStatus } from '@/lib/types/database';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +23,7 @@ const statusFiltersAll: Array<{ id: string; label: string; value?: LogStatus }> 
   { id: 'all', label: '전체' },
   { id: 'pending_review', label: '검토 대기', value: 'pending_review' },
   { id: 'active', label: '정식 등록', value: 'active' },
+  { id: 'archived', label: '보관(삭제)', value: 'archived' },
 ];
 const statusFiltersWithoutReview: Array<{
   id: string;
@@ -40,37 +32,8 @@ const statusFiltersWithoutReview: Array<{
 }> = [
   { id: 'all', label: '전체' },
   { id: 'active', label: '정식 등록', value: 'active' },
+  { id: 'archived', label: '보관(삭제)', value: 'archived' },
 ];
-
-const directionLabel: Record<Direction, string> = { in: '반입', out: '반출' };
-
-const statusLabelMap: Record<LogStatus, string> = {
-  draft: '임시저장',
-  pending_review: '검토 대기',
-  active: '정식',
-  archived: '보관',
-};
-
-function statusTone(status: LogStatus): 'neutral' | 'warning' | 'success' {
-  if (status === 'pending_review') return 'warning';
-  if (status === 'active') return 'success';
-  return 'neutral';
-}
-
-interface LogRow {
-  id: string;
-  log_date: string;
-  direction: Direction;
-  vehicle_no: string | null;
-  weight_kg: number | null;
-  total_amount: number | null;
-  status: LogStatus;
-  is_invoiced: boolean;
-  is_paid: boolean;
-  companies: { name: string } | null;
-  sites: { name: string } | null;
-  waste_types: { name: string } | null;
-}
 
 export default async function LogsPage({
   searchParams,
@@ -94,12 +57,16 @@ export default async function LogsPage({
       `id, log_date, direction, vehicle_no, weight_kg, total_amount, status, is_invoiced, is_paid,
        companies(name), sites(name), waste_types(name)`,
     )
-    .neq('status', 'archived')
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(100);
 
-  if (searchParams.status) query = query.eq('status', searchParams.status);
+  // archived 명시 시만 보임. 미명시 시 archived 자동 제외
+  if (searchParams.status) {
+    query = query.eq('status', searchParams.status);
+  } else {
+    query = query.neq('status', 'archived');
+  }
   if (searchParams.from) query = query.gte('log_date', searchParams.from);
   if (searchParams.to) query = query.lte('log_date', searchParams.to);
   if (searchParams.company) query = query.eq('company_id', searchParams.company);
@@ -263,79 +230,10 @@ export default async function LogsPage({
         </form>
 
         <div className="flex-1 overflow-y-auto p-7">
-          {rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-surface p-10 text-center">
-              <p className="text-sm text-foreground-muted">조건에 맞는 일보가 없습니다.</p>
-              <Link
-                href="/logs/new"
-                className="mt-3 inline-block text-sm font-medium text-foreground underline"
-              >
-                새 일보 입력하기 →
-              </Link>
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>일자</TableHead>
-                    <TableHead>구분</TableHead>
-                    <TableHead>거래처</TableHead>
-                    <TableHead>현장</TableHead>
-                    <TableHead>성상</TableHead>
-                    <TableHead className="text-right">중량</TableHead>
-                    <TableHead className="text-right">청구금액</TableHead>
-                    <TableHead>상태</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((row) => (
-                    <RowLink key={row.id} row={row} />
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <LogsTable rows={rows} />
         </div>
       </div>
     </>
   );
 }
 
-function RowLink({ row }: { row: LogRow }) {
-  const href = `/logs/${row.id}`;
-  const wrap = (children: React.ReactNode) => (
-    <Link href={href} className="block">
-      {children}
-    </Link>
-  );
-  // pending_review 행은 노란 배경으로 시각 강조 (디자인 의도)
-  const rowClass = cn(
-    'cursor-pointer transition-colors',
-    row.status === 'pending_review' && 'bg-warning-bg/40 hover:bg-warning-bg/60',
-  );
-  return (
-    <TableRow className={rowClass}>
-      <TableCell className="font-mono text-xs">{wrap(formatDate(row.log_date))}</TableCell>
-      <TableCell>
-        {wrap(
-          <Pill tone={row.direction === 'in' ? 'info' : 'primary'}>
-            {directionLabel[row.direction]}
-          </Pill>,
-        )}
-      </TableCell>
-      <TableCell className="font-medium">{wrap(row.companies?.name ?? '—')}</TableCell>
-      <TableCell className="text-foreground-secondary">{wrap(row.sites?.name ?? '—')}</TableCell>
-      <TableCell className="text-foreground-secondary">{wrap(row.waste_types?.name ?? '—')}</TableCell>
-      <TableCell className="text-right font-mono text-xs">{wrap(formatKg(row.weight_kg))}</TableCell>
-      <TableCell className="text-right font-mono text-xs">{wrap(formatKRW(row.total_amount))}</TableCell>
-      <TableCell>
-        {wrap(
-          <Pill tone={statusTone(row.status)} dot>
-            {statusLabelMap[row.status]}
-          </Pill>,
-        )}
-      </TableCell>
-    </TableRow>
-  );
-}

@@ -194,6 +194,78 @@ export async function createLogAction(input: WasteLogCreateInput): Promise<Actio
 }
 
 // ========================================
+// 다중 선택 일괄 삭제 (soft delete — status='archived')
+// ========================================
+export interface BulkArchiveResult {
+  ok: boolean;
+  archived: number;
+  error?: string;
+}
+
+export async function bulkArchiveLogsAction(
+  ids: string[],
+  reason?: string | null,
+): Promise<BulkArchiveResult> {
+  if (ids.length === 0) {
+    return { ok: false, archived: 0, error: '선택된 일보가 없습니다' };
+  }
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('waste_logs')
+    .update({ status: 'archived' })
+    .in('id', ids)
+    .neq('status', 'archived')
+    .select('id');
+
+  if (error) return { ok: false, archived: 0, error: error.message };
+
+  const archivedCount = data?.length ?? 0;
+
+  // 사유 별도 audit row (트리거 update 행과 별개)
+  const trimmedReason = reason?.trim();
+  if (trimmedReason && archivedCount > 0) {
+    await supabase.from('audit_logs').insert(
+      (data ?? []).map((r) => ({
+        table_name: 'waste_logs',
+        record_id: (r as { id: string }).id,
+        action: 'update',
+        change_reason: `일괄 삭제(보관): ${trimmedReason}`,
+      })),
+    );
+  }
+
+  revalidatePath('/logs');
+  revalidatePath('/dashboard');
+  return { ok: true, archived: archivedCount };
+}
+
+// ========================================
+// 보관(archived) → active 복원
+// ========================================
+export async function restoreLogAction(id: string): Promise<ActionResult> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('waste_logs')
+    .update({ status: 'active' })
+    .eq('id', id)
+    .eq('status', 'archived');
+  if (error) return { error: error.message };
+
+  await supabase.from('audit_logs').insert({
+    table_name: 'waste_logs',
+    record_id: id,
+    action: 'restore',
+    change_reason: '보관 → 정식 복원',
+  });
+
+  revalidatePath('/logs');
+  revalidatePath('/dashboard');
+  revalidatePath(`/logs/${id}`);
+  return {};
+}
+
+// ========================================
 // 거래명세표에서 인라인 일괄 편집 — 가격·중량·청구·결제 플래그
 // 마스터 변경 X (거래처/성상/처리장/현장은 그대로). calc 자동 재계산.
 // ========================================

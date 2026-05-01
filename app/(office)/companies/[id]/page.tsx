@@ -1,0 +1,224 @@
+import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { ArrowLeft, MapPin } from 'lucide-react';
+import { PageHeader } from '@/components/erp/PageHeader';
+import { Pill } from '@/components/erp/Pill';
+import { Button } from '@/components/ui/button';
+import { CompanyForm } from '@/components/erp/CompanyForm';
+import { ShareTokenPanel } from '@/components/erp/ShareTokenPanel';
+import { createClient } from '@/lib/supabase/server';
+import { formatKRW, formatKg, formatDate } from '@/lib/format';
+import type { Company, Site, Direction } from '@/lib/types/database';
+
+export const dynamic = 'force-dynamic';
+
+interface RecentLog {
+  id: string;
+  log_date: string;
+  direction: Direction;
+  weight_kg: number | null;
+  total_amount: number | null;
+  is_paid: boolean;
+  waste_types: { name: string } | null;
+}
+
+export default async function CompanyDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const supabase = createClient();
+
+  const [companyRes, sitesRes, recentRes, totalRes] = await Promise.all([
+    supabase.from('companies').select('*').eq('id', params.id).maybeSingle(),
+    supabase
+      .from('sites')
+      .select('*')
+      .eq('company_id', params.id)
+      .order('name'),
+    supabase
+      .from('waste_logs')
+      .select(
+        `id, log_date, direction, weight_kg, total_amount, is_paid,
+         waste_types(name)`,
+      )
+      .eq('company_id', params.id)
+      .neq('status', 'archived')
+      .order('log_date', { ascending: false })
+      .limit(10),
+    supabase
+      .from('waste_logs')
+      .select('total_amount, is_paid', { count: 'exact' })
+      .eq('company_id', params.id)
+      .neq('status', 'archived'),
+  ]);
+
+  if (!companyRes.data) notFound();
+  const company = companyRes.data as Company;
+  const sites = (sitesRes.data ?? []) as Site[];
+  const recent = (recentRes.data ?? []) as unknown as RecentLog[];
+  const totalRows = (totalRes.data ?? []) as Array<{
+    total_amount: number | null;
+    is_paid: boolean;
+  }>;
+  const totals = {
+    count: totalRows.length,
+    sum: totalRows.reduce((s, r) => s + (r.total_amount ?? 0), 0),
+    unpaid: totalRows
+      .filter((r) => !r.is_paid)
+      .reduce((s, r) => s + (r.total_amount ?? 0), 0),
+  };
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3003';
+
+  const directionLabel: Record<Direction, string> = { in: '반입', out: '반출' };
+
+  return (
+    <>
+      <PageHeader
+        title={company.name}
+        subtitle={company.business_no ?? '사업자번호 미등록'}
+        breadcrumb={[
+          { label: '에이스알앤씨' },
+          { label: '거래처', href: '/companies' },
+          { label: company.name },
+        ]}
+        actions={
+          <Link href="/companies">
+            <Button size="sm" variant="outline">
+              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" strokeWidth={1.75} />목록
+            </Button>
+          </Link>
+        }
+      />
+      <div className="flex-1 overflow-y-auto p-7">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_320px]">
+          <div className="space-y-5">
+            <CompanyForm
+              mode="edit"
+              companyId={company.id}
+              defaults={{
+                name: company.name,
+                business_no: company.business_no ?? '',
+                address: company.address ?? '',
+                contact_name: company.contact_name ?? '',
+                contact_phone: company.contact_phone ?? '',
+                default_unit_price: company.default_unit_price ?? '',
+                is_internal: company.is_internal,
+              }}
+            />
+
+            <section className="rounded-[10px] border border-border bg-surface p-5 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-[13px] font-semibold tracking-tight">
+                  공사현장 ({sites.length})
+                </h3>
+                <span className="text-[11px] text-foreground-muted">
+                  일보 입력 시 새 현장 입력하면 자동 추가
+                </span>
+              </div>
+              {sites.length === 0 ? (
+                <p className="text-xs text-foreground-muted">등록된 공사현장이 없습니다.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {sites.map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex items-center gap-2 rounded-md border border-border bg-background-subtle px-3 py-2 text-sm"
+                    >
+                      <MapPin
+                        className="h-3.5 w-3.5 text-foreground-muted"
+                        strokeWidth={1.75}
+                      />
+                      <span className="font-medium">{s.name}</span>
+                      {s.address && (
+                        <span className="text-[11px] text-foreground-muted">
+                          {s.address}
+                        </span>
+                      )}
+                      {!s.is_active && (
+                        <Pill tone="neutral" className="ml-auto">
+                          비활성
+                        </Pill>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="rounded-[10px] border border-border bg-surface p-5 shadow-sm">
+              <h3 className="mb-3 text-[13px] font-semibold tracking-tight">
+                최근 거래 (최대 10건)
+              </h3>
+              {recent.length === 0 ? (
+                <p className="text-xs text-foreground-muted">거래 이력이 없습니다.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {recent.map((log) => (
+                    <li
+                      key={log.id}
+                      className="flex items-center justify-between gap-2 border-b border-divider pb-1.5 text-sm last:border-0"
+                    >
+                      <Link
+                        href={`/logs/${log.id}`}
+                        className="flex items-center gap-2 hover:underline"
+                      >
+                        <span className="font-mono text-xs text-foreground-muted">
+                          {formatDate(log.log_date)}
+                        </span>
+                        <Pill tone={log.direction === 'in' ? 'info' : 'primary'}>
+                          {directionLabel[log.direction]}
+                        </Pill>
+                        <span>{log.waste_types?.name ?? '—'}</span>
+                        <span className="font-mono text-xs text-foreground-muted">
+                          {formatKg(log.weight_kg)}
+                        </span>
+                      </Link>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">
+                          {formatKRW(log.total_amount)}
+                        </span>
+                        <Pill tone={log.is_paid ? 'success' : 'warning'}>
+                          {log.is_paid ? '완료' : '대기'}
+                        </Pill>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+
+          <aside>
+            <div className="sticky top-4 space-y-4">
+              <div className="rounded-[10px] border border-border bg-surface p-4 shadow-sm">
+                <h3 className="text-[13px] font-semibold tracking-tight">전체 요약</h3>
+                <dl className="mt-3 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <dt className="text-foreground-muted">총 거래</dt>
+                    <dd className="font-mono">{totals.count}건</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-foreground-muted">청구 합계</dt>
+                    <dd className="font-mono">{formatKRW(totals.sum)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-divider pt-2">
+                    <dt className="text-foreground-muted">미결제</dt>
+                    <dd className="font-mono text-danger">{formatKRW(totals.unpaid)}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <ShareTokenPanel
+                companyId={company.id}
+                initialToken={company.share_token}
+                appUrl={appUrl}
+              />
+            </div>
+          </aside>
+        </div>
+      </div>
+    </>
+  );
+}

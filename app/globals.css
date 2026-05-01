@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+}
+
+/* ========================================
+ * 인쇄 모드 — 거래명세표 / 처리확인서 등
+ * Shell 사이드바와 PageHeader 는 print:hidden 으로 숨김.
+ * invoice-sheet 영역만 가시.
+ * ======================================== */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: white !important;
+    font-size: 10pt;
+  }
+
+  main {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  .invoice-sheet {
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  /* 표 행이 페이지 가운데서 끊기지 않게 */
+  tr {
+    page-break-inside: avoid;
+  }
+}

@@ -40,6 +40,7 @@ export function SelfCompanyForm({ initial }: Props) {
       representative: data.representative?.trim() || null,
       address: data.address?.trim() || null,
       phone: data.phone?.trim() || null,
+      fax: data.fax?.trim() || null,
       business_type: data.business_type?.trim() || null,
       business_item: data.business_item?.trim() || null,
       stamp_url: stampUrl,
@@ -114,11 +115,18 @@ export function SelfCompanyForm({ initial }: Props) {
         <Input id="sc-addr" {...register('address')} placeholder="경북 포항시 ..." />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="sc-phone">전화</Label>
-          <Input id="sc-phone" {...register('phone')} placeholder="054-000-0000" />
+          <Input id="sc-phone" {...register('phone')} placeholder="054-275-1392" />
         </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="sc-fax">팩스</Label>
+          <Input id="sc-fax" {...register('fax')} placeholder="054-272-1392" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="sc-bt">업태</Label>
           <Input id="sc-bt" {...register('business_type')} />

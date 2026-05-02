@@ -22,6 +22,7 @@ interface SnapshotRow {
   sites: { name: string } | null;
   waste_types: { name: string } | null;
   treatment_plants: { name: string } | null;
+  treatment_plant_name_snapshot: string | null;
 }
 
 function csvEscape(v: string | number | null | undefined): string {
@@ -54,7 +55,8 @@ export async function GET(
       `id, log_date, direction, vehicle_no, weight_kg, unit_price,
        supply_amount, vat, total_amount, billing_type, status,
        is_invoiced, is_paid, note,
-       companies(name), sites(name), waste_types(name), treatment_plants(name)`,
+       companies(name), sites(name), waste_types(name), treatment_plants(name),
+       treatment_plant_name_snapshot`,
     )
     .lte('created_at', snap.created_at)
     .order('log_date', { ascending: true });
@@ -90,7 +92,7 @@ export async function GET(
         r.companies?.name ?? '',
         r.sites?.name ?? '',
         r.waste_types?.name ?? '',
-        r.treatment_plants?.name ?? '',
+        r.treatment_plants?.name ?? r.treatment_plant_name_snapshot ?? '',
         r.vehicle_no ?? '',
         r.weight_kg ?? '',
         r.unit_price ?? '',

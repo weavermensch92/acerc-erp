@@ -151,8 +151,26 @@ export async function deleteTreatmentPlantAction(
     };
   }
 
-  // 사용 중인 일보의 treatment_plant_id 를 null 로 분리
   if (usage > 0 && options?.detachLogs) {
+    // 1) 마스터 이름을 snapshot 으로 보존 (FK 끊은 후에도 일보 표시 유지)
+    const { data: plantRow, error: readErr } = await supabase
+      .from('treatment_plants')
+      .select('name')
+      .eq('id', id)
+      .maybeSingle();
+    if (readErr || !plantRow) {
+      return { ok: false, error: readErr?.message ?? '처리장 정보를 읽을 수 없습니다' };
+    }
+
+    const { error: snapErr } = await supabase
+      .from('waste_logs')
+      .update({ treatment_plant_name_snapshot: plantRow.name })
+      .eq('treatment_plant_id', id);
+    if (snapErr) {
+      return { ok: false, error: `이름 snapshot 실패: ${snapErr.message}` };
+    }
+
+    // 2) FK detach
     const { error: detachErr } = await supabase
       .from('waste_logs')
       .update({ treatment_plant_id: null })

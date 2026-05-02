@@ -164,6 +164,7 @@ export async function createLogAction(input: WasteLogCreateInput): Promise<Actio
       site_id: siteId,
       waste_type_id: wasteTypeId,
       treatment_plant_id: treatmentPlantId,
+      treatment_plant_name_snapshot: null,
       vehicle_no: data.vehicle_no ?? null,
       weight_total_kg: data.weight_total_kg ?? null,
       weight_tare_kg: data.weight_tare_kg ?? null,
@@ -388,6 +389,8 @@ export async function updateLogAction(
       site_id: siteId,
       waste_type_id: wasteTypeId,
       treatment_plant_id: treatmentPlantId,
+      // 새로 처리장이 매칭/생성되면 snapshot은 비움 (FK 가 정상이면 fallback 불필요)
+      treatment_plant_name_snapshot: treatmentPlantId ? null : undefined,
       vehicle_no: data.vehicle_no ?? null,
       weight_total_kg: data.weight_total_kg ?? null,
       weight_tare_kg: data.weight_tare_kg ?? null,

@@ -19,6 +19,7 @@ interface LogDetail {
   companies: { name: string } | null;
   waste_types: { name: string } | null;
   treatment_plants: { name: string } | null;
+  treatment_plant_name_snapshot: string | null;
 }
 
 export default async function WeightCertPage({
@@ -33,7 +34,8 @@ export default async function WeightCertPage({
     .from('waste_logs')
     .select(
       `log_date, vehicle_no, weight_total_kg, weight_tare_kg, weight_kg,
-       companies(name), waste_types(name), treatment_plants(name)`,
+       companies(name), waste_types(name), treatment_plants(name),
+       treatment_plant_name_snapshot`,
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -77,7 +79,12 @@ export default async function WeightCertPage({
           }}
           company={detail.companies}
           selfCompany={selfCompany}
-          plant={detail.treatment_plants}
+          plant={
+            detail.treatment_plants ??
+            (detail.treatment_plant_name_snapshot
+              ? { name: detail.treatment_plant_name_snapshot }
+              : null)
+          }
           wasteType={detail.waste_types}
         />
       </div>

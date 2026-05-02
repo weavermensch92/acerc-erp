@@ -49,10 +49,10 @@ export default function LoginPage() {
             type="text"
             autoComplete="username"
             required
-            placeholder="ace6125332"
+            placeholder="사무실에서 받은 ID"
           />
           <p className="text-[10.5px] text-foreground-muted">
-            ID 만 입력 (예: <span className="font-mono">ace6125332</span>) — 도메인 자동 부착
+            ID 만 입력 — 도메인 자동 부착
           </p>
           {state.fieldErrors?.email && (
             <p className="text-xs text-danger">{state.fieldErrors.email[0]}</p>

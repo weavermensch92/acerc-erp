@@ -79,9 +79,18 @@ function statesEqual(a: RowState | undefined, b: RowState | undefined): boolean 
 
 interface Props {
   logs: EditableLog[];
+  // 컨텍스트별 라벨 — 반입(거래명세표) 기본값, 반출(지급) 시 prop 으로 덮어씀
+  invoicedLabel?: string; // 청구 / 청구서수령
+  paidLabel?: string;     // 결제 / 지급
+  amountLabel?: string;   // 청구금액 / 지급금액
 }
 
-export function EditableInvoiceTable({ logs }: Props) {
+export function EditableInvoiceTable({
+  logs,
+  invoicedLabel = '청구',
+  paidLabel = '결제',
+  amountLabel = '청구금액',
+}: Props) {
   const initial = useMemo(
     () =>
       logs.reduce<Record<string, RowState>>((acc, l) => {
@@ -196,9 +205,9 @@ export function EditableInvoiceTable({ logs }: Props) {
               <Th className="w-20 text-right">중량(kg)</Th>
               <Th className="w-20 text-right">단가</Th>
               <Th className="w-20 text-right">운반비</Th>
-              <Th className="w-28 text-right">청구금액</Th>
-              <Th className="w-12 text-center">청구</Th>
-              <Th className="w-12 text-center">결제</Th>
+              <Th className="w-28 text-right">{amountLabel}</Th>
+              <Th className="w-12 text-center">{invoicedLabel}</Th>
+              <Th className="w-12 text-center">{paidLabel}</Th>
               <Th className="w-32">비고</Th>
               <Th className="w-10"></Th>
             </tr>

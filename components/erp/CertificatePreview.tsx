@@ -32,6 +32,8 @@ interface Props {
   plant: PlantInfo | null;
   wasteType: WasteTypeInfo;
   issuedAt?: Date;
+  // 자사가 처리장 역할도 하는 경우 — 처리자 서명란에도 자사 도장 표시
+  selfAsProcessor?: boolean;
 }
 
 // PRD § 시나리오 5 — 폐기물관리법 표준 양식 (간이 버전)
@@ -44,6 +46,7 @@ export function CertificatePreview({
   plant,
   wasteType,
   issuedAt = new Date(),
+  selfAsProcessor = false,
 }: Props) {
   return (
     <div className="invoice-sheet mx-auto max-w-[820px] bg-surface text-foreground print:max-w-none print:bg-white">
@@ -104,8 +107,16 @@ export function CertificatePreview({
 
         <div className="mt-8 grid grid-cols-3 gap-3 text-xs">
           <SignatureBox label="배출자" name={company.name} />
-          <SignatureBox label="운반자" name={selfCompany.name} />
-          <SignatureBox label="처리자" name={plant?.name ?? '—'} />
+          <SignatureBox
+            label="운반자"
+            name={selfCompany.name}
+            stampUrl={selfCompany.stamp_url ?? null}
+          />
+          <SignatureBox
+            label="처리자"
+            name={plant?.name ?? '—'}
+            stampUrl={selfAsProcessor ? selfCompany.stamp_url ?? null : null}
+          />
         </div>
 
         <p className="mt-8 text-center text-[10px] text-foreground-muted print:text-gray-600">
@@ -148,11 +159,27 @@ function PartyTable({
   );
 }
 
-function SignatureBox({ label, name }: { label: string; name: string }) {
+function SignatureBox({
+  label,
+  name,
+  stampUrl,
+}: {
+  label: string;
+  name: string;
+  stampUrl?: string | null;
+}) {
   return (
-    <div className="border border-foreground p-3 print:border-black">
+    <div className="relative border border-foreground p-3 print:border-black">
       <div className="text-[10.5px] text-foreground-muted print:text-gray-700">{label}</div>
       <div className="mt-1 text-sm font-medium">{name}</div>
+      {stampUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={stampUrl}
+          alt="날인"
+          className="absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
+        />
+      )}
       <div className="mt-8 text-right text-[10px] text-foreground-muted print:text-gray-600">
         (서명 또는 인)
       </div>

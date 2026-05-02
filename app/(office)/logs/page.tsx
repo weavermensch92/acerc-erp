@@ -17,6 +17,7 @@ interface SearchParams {
   from?: string;
   to?: string;
   company?: string;
+  direction?: string;
 }
 
 const statusFiltersAll: Array<{ id: string; label: string; value?: LogStatus }> = [
@@ -71,6 +72,9 @@ export default async function LogsPage({
   if (searchParams.from) query = query.gte('log_date', searchParams.from);
   if (searchParams.to) query = query.lte('log_date', searchParams.to);
   if (searchParams.company) query = query.eq('company_id', searchParams.company);
+  if (searchParams.direction === 'in' || searchParams.direction === 'out') {
+    query = query.eq('direction', searchParams.direction);
+  }
 
   const { data: logs } = await query;
   const rows = (logs ?? []) as unknown as LogRow[];
@@ -92,6 +96,18 @@ export default async function LogsPage({
     if (searchParams.from) params.set('from', searchParams.from);
     if (searchParams.to) params.set('to', searchParams.to);
     if (searchParams.company) params.set('company', searchParams.company);
+    if (searchParams.direction) params.set('direction', searchParams.direction);
+    const q = params.toString();
+    return q ? `/logs?${q}` : '/logs';
+  };
+
+  const buildDirectionHref = (directionValue?: string) => {
+    const params = new URLSearchParams();
+    if (directionValue) params.set('direction', directionValue);
+    if (searchParams.status) params.set('status', searchParams.status);
+    if (searchParams.from) params.set('from', searchParams.from);
+    if (searchParams.to) params.set('to', searchParams.to);
+    if (searchParams.company) params.set('company', searchParams.company);
     const q = params.toString();
     return q ? `/logs?${q}` : '/logs';
   };
@@ -100,7 +116,8 @@ export default async function LogsPage({
     !!searchParams.status ||
     !!searchParams.from ||
     !!searchParams.to ||
-    !!searchParams.company;
+    !!searchParams.company ||
+    !!searchParams.direction;
 
   const selectedCompanyName = searchParams.company
     ? companies.find((c) => c.id === searchParams.company)?.name
@@ -186,6 +203,34 @@ export default async function LogsPage({
           })}
         </div>
 
+        {/* 구분 칩 (반입/반출) */}
+        <div className="flex flex-shrink-0 items-center gap-2 border-b border-border bg-surface px-7 py-3">
+          <span className="mr-1 text-[11.5px] text-foreground-muted">구분</span>
+          {(
+            [
+              { id: 'all', label: '전체', value: undefined },
+              { id: 'in', label: '반입 (매출)', value: 'in' },
+              { id: 'out', label: '반출 (매입)', value: 'out' },
+            ] as Array<{ id: string; label: string; value?: string }>
+          ).map((f) => {
+            const active = (searchParams.direction ?? 'all') === (f.value ?? 'all');
+            return (
+              <Link
+                key={f.id}
+                href={buildDirectionHref(f.value)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px] font-medium transition-colors',
+                  active
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-border bg-surface text-foreground-secondary hover:bg-background-subtle',
+                )}
+              >
+                {f.label}
+              </Link>
+            );
+          })}
+        </div>
+
         {/* 추가 필터 (거래처 + 기간) — GET form */}
         <form
           method="get"
@@ -193,6 +238,9 @@ export default async function LogsPage({
         >
           {searchParams.status && (
             <input type="hidden" name="status" value={searchParams.status} />
+          )}
+          {searchParams.direction && (
+            <input type="hidden" name="direction" value={searchParams.direction} />
           )}
           <div className="space-y-1">
             <label className="text-[10.5px] text-foreground-muted">거래처</label>

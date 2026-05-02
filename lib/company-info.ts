@@ -11,6 +11,8 @@ export const selfCompanySchema = z.object({
   phone: z.string().max(20).optional().nullable(),
   business_type: z.string().max(100).optional().nullable(),
   business_item: z.string().max(100).optional().nullable(),
+  stamp_url: z.string().url().max(2000).optional().nullable(),
+  stamp_path: z.string().max(500).optional().nullable(),
 });
 
 export type SelfCompanyInfo = z.infer<typeof selfCompanySchema>;
@@ -24,4 +26,6 @@ export const DEFAULT_SELF_COMPANY: SelfCompanyInfo = {
   phone: '',
   business_type: '폐기물 수집운반·처리업',
   business_item: '폐기물 처리',
+  stamp_url: null,
+  stamp_path: null,
 };

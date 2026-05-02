@@ -36,13 +36,14 @@ export async function createInvoiceBatchAction(input: {
   const data = parsed.data;
   const supabase = createClient();
 
-  // 거래처별 합계 집계 (active 만)
+  // 거래처별 합계 집계 — 반입(매출)만 (반출은 매입이므로 제외)
   const { data: logs } = await supabase
     .from('waste_logs')
     .select('company_id, total_amount')
     .in('company_id', data.company_ids)
     .gte('log_date', data.period_from)
     .lte('log_date', data.period_to)
+    .eq('direction', 'in')
     .eq('status', 'active');
 
   const totalAmount = (logs ?? []).reduce(

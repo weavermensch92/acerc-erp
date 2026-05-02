@@ -49,7 +49,7 @@ export default async function CompanyDetailPage({
       .limit(10),
     supabase
       .from('waste_logs')
-      .select('total_amount, is_paid', { count: 'exact' })
+      .select('total_amount, is_paid, direction', { count: 'exact' })
       .eq('company_id', params.id)
       .neq('status', 'archived'),
   ]);
@@ -61,11 +61,20 @@ export default async function CompanyDetailPage({
   const totalRows = (totalRes.data ?? []) as Array<{
     total_amount: number | null;
     is_paid: boolean;
+    direction: Direction;
   }>;
+  const inRows = totalRows.filter((r) => r.direction === 'in');
+  const outRows = totalRows.filter((r) => r.direction === 'out');
   const totals = {
     count: totalRows.length,
-    sum: totalRows.reduce((s, r) => s + (r.total_amount ?? 0), 0),
-    unpaid: totalRows
+    inCount: inRows.length,
+    inSum: inRows.reduce((s, r) => s + (r.total_amount ?? 0), 0),
+    inUnpaid: inRows
+      .filter((r) => !r.is_paid)
+      .reduce((s, r) => s + (r.total_amount ?? 0), 0),
+    outCount: outRows.length,
+    outSum: outRows.reduce((s, r) => s + (r.total_amount ?? 0), 0),
+    outUnpaid: outRows
       .filter((r) => !r.is_paid)
       .reduce((s, r) => s + (r.total_amount ?? 0), 0),
   };
@@ -200,15 +209,47 @@ export default async function CompanyDetailPage({
                     <dt className="text-foreground-muted">총 거래</dt>
                     <dd className="font-mono">{totals.count}건</dd>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <dt className="text-foreground-muted">청구 합계</dt>
-                    <dd className="font-mono">{formatKRW(totals.sum)}</dd>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-divider pt-2">
-                    <dt className="text-foreground-muted">미결제</dt>
-                    <dd className="font-mono text-danger">{formatKRW(totals.unpaid)}</dd>
-                  </div>
                 </dl>
+
+                <div className="mt-3 rounded-md border border-border bg-background-subtle/40 p-2.5">
+                  <div className="text-[10.5px] font-semibold text-foreground-muted">
+                    반입 (매출)
+                  </div>
+                  <dl className="mt-1.5 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <dt className="text-foreground-muted">건수</dt>
+                      <dd className="font-mono">{totals.inCount}건</dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt className="text-foreground-muted">청구 합계</dt>
+                      <dd className="font-mono">{formatKRW(totals.inSum)}</dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt className="text-foreground-muted">미수금</dt>
+                      <dd className="font-mono text-danger">{formatKRW(totals.inUnpaid)}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div className="mt-2 rounded-md border border-border bg-background-subtle/40 p-2.5">
+                  <div className="text-[10.5px] font-semibold text-foreground-muted">
+                    반출 (매입)
+                  </div>
+                  <dl className="mt-1.5 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <dt className="text-foreground-muted">건수</dt>
+                      <dd className="font-mono">{totals.outCount}건</dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt className="text-foreground-muted">매입 합계</dt>
+                      <dd className="font-mono">{formatKRW(totals.outSum)}</dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt className="text-foreground-muted">미지급</dt>
+                      <dd className="font-mono text-danger">{formatKRW(totals.outUnpaid)}</dd>
+                    </div>
+                  </dl>
+                </div>
               </div>
 
               {!company.is_deleted && (

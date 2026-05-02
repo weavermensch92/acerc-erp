@@ -49,38 +49,88 @@ function calcDelta(current: number, previous: number): DeltaInfo | null {
   };
 }
 
+type MonthRow = {
+  total_amount: number | null;
+  is_invoiced: boolean;
+  is_paid: boolean;
+  direction: Direction;
+  company_id: string;
+  companies: { name: string } | null;
+};
+
+type PrevRow = {
+  total_amount: number | null;
+  is_invoiced: boolean;
+  is_paid: boolean;
+  direction: Direction;
+};
+
+interface DirectionStats {
+  count: number;
+  totalAmount: number;
+  uninvoiced: number;
+  unpaid: number;
+  unpaidAmount: number;
+}
+
+function aggregate(rows: Array<{ total_amount: number | null; is_invoiced: boolean; is_paid: boolean; direction: Direction }>, dir: Direction): DirectionStats {
+  const filtered = rows.filter((r) => r.direction === dir);
+  return {
+    count: filtered.length,
+    totalAmount: filtered.reduce((s, r) => s + (r.total_amount ?? 0), 0),
+    uninvoiced: filtered.filter((r) => !r.is_invoiced).length,
+    unpaid: filtered.filter((r) => !r.is_paid).length,
+    unpaidAmount: filtered
+      .filter((r) => !r.is_paid)
+      .reduce((s, r) => s + (r.total_amount ?? 0), 0),
+  };
+}
+
+function buildTop5(rows: MonthRow[], dir: Direction): CompanyRanking[] {
+  const agg = new Map<string, { name: string; amount: number; count: number }>();
+  for (const r of rows) {
+    if (r.direction !== dir) continue;
+    const id = r.company_id;
+    const name = r.companies?.name ?? '—';
+    const cur = agg.get(id) ?? { name, amount: 0, count: 0 };
+    cur.amount += r.total_amount ?? 0;
+    cur.count += 1;
+    agg.set(id, cur);
+  }
+  return [...agg.entries()]
+    .map(([id, v]) => ({ id, name: v.name, amount: v.amount, count: v.count }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
+}
+
 export default async function DashboardPage() {
   const supabase = createClient();
   const { start: thisStart, end: thisEnd, label: monthLabel } = getMonthRange(0);
   const { start: prevStart, end: prevEnd } = getMonthRange(-1);
 
-  // 이번달 active 일보
   const { data: thisMonth } = await supabase
     .from('waste_logs')
     .select(
-      `total_amount, is_invoiced, is_paid, company_id,
+      `total_amount, is_invoiced, is_paid, direction, company_id,
        companies(name)`,
     )
     .gte('log_date', thisStart)
     .lte('log_date', thisEnd)
     .eq('status', 'active');
 
-  // 전월 (delta 계산용 — count + total_amount 만)
   const { data: prevMonth } = await supabase
     .from('waste_logs')
-    .select('total_amount, is_invoiced, is_paid')
+    .select('total_amount, is_invoiced, is_paid, direction')
     .gte('log_date', prevStart)
     .lte('log_date', prevEnd)
     .eq('status', 'active');
 
-  // 14일 일별 in/out
   const { data: last14 } = await supabase
     .from('waste_logs')
     .select('log_date, direction, weight_kg')
     .gte('log_date', getLast14Days()[0])
     .neq('status', 'archived');
 
-  // 최근 5건
   const { data: recent } = await supabase
     .from('waste_logs')
     .select(
@@ -92,7 +142,6 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false })
     .limit(5);
 
-  // 검토 대기 (review on 일 때만)
   const reviewEnabled = await getReviewProcessEnabled();
   let pendingCount: number | null = null;
   if (reviewEnabled) {
@@ -103,35 +152,14 @@ export default async function DashboardPage() {
     pendingCount = count ?? 0;
   }
 
-  // ========== 집계 ==========
-  type ThisRow = {
-    total_amount: number | null;
-    is_invoiced: boolean;
-    is_paid: boolean;
-    company_id: string;
-    companies: { name: string } | null;
-  };
-  const thisRows = (thisMonth ?? []) as unknown as ThisRow[];
-  const prevRows = (prevMonth ?? []) as Array<{
-    total_amount: number | null;
-    is_invoiced: boolean;
-    is_paid: boolean;
-  }>;
+  const thisRows = (thisMonth ?? []) as unknown as MonthRow[];
+  const prevRows = (prevMonth ?? []) as PrevRow[];
 
-  const stats = {
-    count: thisRows.length,
-    totalAmount: thisRows.reduce((s, r) => s + (r.total_amount ?? 0), 0),
-    uninvoiced: thisRows.filter((r) => !r.is_invoiced).length,
-    unpaid: thisRows.filter((r) => !r.is_paid).length,
-  };
-  const prevStats = {
-    count: prevRows.length,
-    totalAmount: prevRows.reduce((s, r) => s + (r.total_amount ?? 0), 0),
-    uninvoiced: prevRows.filter((r) => !r.is_invoiced).length,
-    unpaid: prevRows.filter((r) => !r.is_paid).length,
-  };
+  const inStats = aggregate(thisRows, 'in');
+  const outStats = aggregate(thisRows, 'out');
+  const prevInStats = aggregate(prevRows, 'in');
+  const prevOutStats = aggregate(prevRows, 'out');
 
-  // 14일 일별
   type DayRow = { log_date: string; direction: Direction; weight_kg: number | null };
   const last14Rows = (last14 ?? []) as DayRow[];
   const dayMap = new Map<string, { inKg: number; outKg: number }>();
@@ -149,20 +177,8 @@ export default async function DashboardPage() {
     outKg: dayMap.get(date)!.outKg,
   }));
 
-  // Top5 거래처 (이번달, total_amount 합 기준)
-  const companyAgg = new Map<string, { name: string; amount: number; count: number }>();
-  for (const r of thisRows) {
-    const id = r.company_id;
-    const name = r.companies?.name ?? '—';
-    const cur = companyAgg.get(id) ?? { name, amount: 0, count: 0 };
-    cur.amount += r.total_amount ?? 0;
-    cur.count += 1;
-    companyAgg.set(id, cur);
-  }
-  const top5: CompanyRanking[] = [...companyAgg.entries()]
-    .map(([id, v]) => ({ id, name: v.name, amount: v.amount, count: v.count }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 5);
+  const topInCompanies = buildTop5(thisRows, 'in');
+  const topOutCompanies = buildTop5(thisRows, 'out');
 
   return (
     <>
@@ -194,41 +210,101 @@ export default async function DashboardPage() {
           </Link>
         )}
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard
-            label="이번달 건수"
-            value={formatNumber(stats.count)}
-            hint={monthLabel}
-            delta={calcDelta(stats.count, prevStats.count)}
-          />
-          <StatCard
-            label="청구 합계"
-            value={formatKRW(stats.totalAmount)}
-            hint="VAT 포함"
-            delta={calcDelta(stats.totalAmount, prevStats.totalAmount)}
-          />
-          <StatCard
-            label="미청구"
-            value={formatNumber(stats.uninvoiced)}
-            hint="명세표 미발급"
-            tone={stats.uninvoiced > 0 ? 'warning' : 'neutral'}
-            delta={calcDelta(stats.uninvoiced, prevStats.uninvoiced)}
-          />
-          <StatCard
-            label="미결제"
-            value={formatNumber(stats.unpaid)}
-            hint="입금 미확인"
-            tone={stats.unpaid > 0 ? 'danger' : 'neutral'}
-            delta={calcDelta(stats.unpaid, prevStats.unpaid)}
-          />
-        </div>
+        {/* 반입 (매출) — 거래처에게 청구 */}
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-[13px] font-semibold tracking-tight">
+              반입 <span className="text-foreground-muted">(매출 · 거래처 청구)</span>
+            </h2>
+            <Link
+              href="/logs?direction=in"
+              className="text-[11.5px] text-foreground-muted hover:underline"
+            >
+              반입 일보 보기 →
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatCard
+              label="반입 건수"
+              value={formatNumber(inStats.count)}
+              hint={monthLabel}
+              delta={calcDelta(inStats.count, prevInStats.count)}
+            />
+            <StatCard
+              label="매출 합계"
+              value={formatKRW(inStats.totalAmount)}
+              hint="VAT 포함"
+              delta={calcDelta(inStats.totalAmount, prevInStats.totalAmount)}
+            />
+            <StatCard
+              label="미청구"
+              value={formatNumber(inStats.uninvoiced)}
+              hint="명세표 미발급"
+              tone={inStats.uninvoiced > 0 ? 'warning' : 'neutral'}
+              delta={calcDelta(inStats.uninvoiced, prevInStats.uninvoiced)}
+            />
+            <StatCard
+              label="미수금"
+              value={formatKRW(inStats.unpaidAmount)}
+              hint={`${inStats.unpaid}건 미입금`}
+              tone={inStats.unpaid > 0 ? 'danger' : 'neutral'}
+              delta={calcDelta(inStats.unpaidAmount, prevInStats.unpaidAmount)}
+            />
+          </div>
+        </section>
 
-        {/* 차트 + Top5 */}
+        {/* 반출 (매입) — 처리장에 지급 */}
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-[13px] font-semibold tracking-tight">
+              반출 <span className="text-foreground-muted">(매입 · 처리장 지급)</span>
+            </h2>
+            <Link
+              href="/logs?direction=out"
+              className="text-[11.5px] text-foreground-muted hover:underline"
+            >
+              반출 일보 보기 →
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatCard
+              label="반출 건수"
+              value={formatNumber(outStats.count)}
+              hint={monthLabel}
+              delta={calcDelta(outStats.count, prevOutStats.count)}
+            />
+            <StatCard
+              label="매입 합계"
+              value={formatKRW(outStats.totalAmount)}
+              hint="VAT 포함"
+              delta={calcDelta(outStats.totalAmount, prevOutStats.totalAmount)}
+            />
+            <StatCard
+              label="미정산"
+              value={formatNumber(outStats.uninvoiced)}
+              hint="청구서 미수령"
+              tone={outStats.uninvoiced > 0 ? 'warning' : 'neutral'}
+              delta={calcDelta(outStats.uninvoiced, prevOutStats.uninvoiced)}
+            />
+            <StatCard
+              label="미지급"
+              value={formatKRW(outStats.unpaidAmount)}
+              hint={`${outStats.unpaid}건 미지급`}
+              tone={outStats.unpaid > 0 ? 'danger' : 'neutral'}
+              delta={calcDelta(outStats.unpaidAmount, prevOutStats.unpaidAmount)}
+            />
+          </div>
+        </section>
+
+        {/* 차트 + Top5 (반입/반출 분리) */}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_320px]">
           <div className="rounded-[10px] border border-border bg-surface p-5 shadow-sm">
             <InOutChart buckets={buckets} />
           </div>
-          <TopCompaniesCard items={top5} />
+          <div className="space-y-3">
+            <TopCompaniesCard items={topInCompanies} title="매출 Top 5 (반입)" />
+            <TopCompaniesCard items={topOutCompanies} title="매입 Top 5 (반출)" />
+          </div>
         </div>
 
         {/* 최근 거래 + 빠른작업 */}

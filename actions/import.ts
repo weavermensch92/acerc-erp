@@ -14,6 +14,8 @@ export interface ImportRow {
   treatment_plant_name: string | null;
   vehicle_no: string | null;
   weight_kg: number | null;
+  weight_total_kg: number | null;
+  weight_tare_kg: number | null;
   unit_price: number | null;
   transport_fee: number | null;
   billing_type: BillingType;
@@ -184,6 +186,8 @@ export async function bulkImportLogsAction(rows: ImportRow[]): Promise<BulkImpor
       treatment_plant_id: plantId,
       vehicle_no: r.vehicle_no ?? null,
       weight_kg: r.weight_kg ?? null,
+      weight_total_kg: r.weight_total_kg ?? null,
+      weight_tare_kg: r.weight_tare_kg ?? null,
       unit_price: r.unit_price ?? null,
       transport_fee: r.transport_fee ?? 0,
       billing_type: r.billing_type,

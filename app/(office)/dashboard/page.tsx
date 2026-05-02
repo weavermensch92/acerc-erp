@@ -9,29 +9,81 @@ import {
 } from '@/components/erp/TopCompaniesCard';
 import { RecentLogsCard, type RecentLog } from '@/components/erp/RecentLogsCard';
 import { QuickActions } from '@/components/erp/QuickActions';
+import { DashboardPeriodPicker } from '@/components/erp/DashboardPeriodPicker';
 import { createClient } from '@/lib/supabase/server';
 import { getReviewProcessEnabled } from '@/lib/settings';
-import { formatKRW, formatNumber, formatMonth } from '@/lib/format';
+import { formatKRW, formatNumber, formatMonth, formatDate } from '@/lib/format';
 import type { Direction } from '@/lib/types/database';
 
 export const dynamic = 'force-dynamic';
 
-function getMonthRange(offset = 0) {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  return { start: fmt(start), end: fmt(end), label: formatMonth(start) };
+type Mode = 'daily' | 'monthly';
+
+interface PeriodRange {
+  mode: Mode;
+  start: string; // YYYY-MM-DD inclusive
+  end: string;   // YYYY-MM-DD inclusive
+  prevStart: string;
+  prevEnd: string;
+  label: string; // 화면 표시용
+  chartFromDate: string; // 차트에 보여줄 시작일
+  chartToDate: string;   // 차트에 보여줄 종료일
 }
 
-function getLast14Days(): string[] {
-  const days: string[] = [];
+function fmt(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function parsePeriodFromParams(searchParams: {
+  mode?: string;
+  date?: string;
+  month?: string;
+}): PeriodRange {
   const now = new Date();
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
+  const mode: Mode = searchParams.mode === 'daily' ? 'daily' : 'monthly';
+
+  if (mode === 'daily') {
+    const dateStr =
+      searchParams.date && /^\d{4}-\d{2}-\d{2}$/.test(searchParams.date)
+        ? searchParams.date
+        : fmt(now);
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const target = new Date(y, m - 1, d);
+    const prev = new Date(y, m - 1, d - 1);
+    // 차트는 선택일 기준 14일치
+    const chartStart = new Date(y, m - 1, d - 13);
+    return {
+      mode,
+      start: fmt(target),
+      end: fmt(target),
+      prevStart: fmt(prev),
+      prevEnd: fmt(prev),
+      label: formatDate(target, 'yyyy년 M월 d일'),
+      chartFromDate: fmt(chartStart),
+      chartToDate: fmt(target),
+    };
   }
-  return days;
+
+  // monthly (default)
+  const monthStr =
+    searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month)
+      ? searchParams.month
+      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [y, m] = monthStr.split('-').map(Number);
+  const start = new Date(y, m - 1, 1);
+  const end = new Date(y, m, 0);
+  const prevStart = new Date(y, m - 2, 1);
+  const prevEnd = new Date(y, m - 1, 0);
+  return {
+    mode,
+    start: fmt(start),
+    end: fmt(end),
+    prevStart: fmt(prevStart),
+    prevEnd: fmt(prevEnd),
+    label: formatMonth(start),
+    chartFromDate: fmt(start),
+    chartToDate: fmt(end),
+  };
 }
 
 function calcDelta(current: number, previous: number): DeltaInfo | null {
@@ -73,7 +125,10 @@ interface DirectionStats {
   unpaidAmount: number;
 }
 
-function aggregate(rows: Array<{ total_amount: number | null; is_invoiced: boolean; is_paid: boolean; direction: Direction }>, dir: Direction): DirectionStats {
+function aggregate(
+  rows: Array<{ total_amount: number | null; is_invoiced: boolean; is_paid: boolean; direction: Direction }>,
+  dir: Direction,
+): DirectionStats {
   const filtered = rows.filter((r) => r.direction === dir);
   return {
     count: filtered.length,
@@ -103,34 +158,54 @@ function buildTop5(rows: MonthRow[], dir: Direction): CompanyRanking[] {
     .slice(0, 5);
 }
 
-export default async function DashboardPage() {
-  const supabase = createClient();
-  const { start: thisStart, end: thisEnd, label: monthLabel } = getMonthRange(0);
-  const { start: prevStart, end: prevEnd } = getMonthRange(-1);
+function enumerateDays(from: string, to: string): string[] {
+  const result: string[] = [];
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  const start = new Date(fy, fm - 1, fd);
+  const end = new Date(ty, tm - 1, td);
+  for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
+    result.push(fmt(cur));
+  }
+  return result;
+}
 
-  const { data: thisMonth } = await supabase
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: { mode?: string; date?: string; month?: string };
+}) {
+  const supabase = createClient();
+  const period = parsePeriodFromParams(searchParams);
+
+  // 선택 기간 active 일보
+  const { data: thisData } = await supabase
     .from('waste_logs')
     .select(
       `total_amount, is_invoiced, is_paid, direction, company_id,
        companies(name)`,
     )
-    .gte('log_date', thisStart)
-    .lte('log_date', thisEnd)
+    .gte('log_date', period.start)
+    .lte('log_date', period.end)
     .eq('status', 'active');
 
-  const { data: prevMonth } = await supabase
+  // 직전 기간 (delta 계산용)
+  const { data: prevData } = await supabase
     .from('waste_logs')
     .select('total_amount, is_invoiced, is_paid, direction')
-    .gte('log_date', prevStart)
-    .lte('log_date', prevEnd)
+    .gte('log_date', period.prevStart)
+    .lte('log_date', period.prevEnd)
     .eq('status', 'active');
 
-  const { data: last14 } = await supabase
+  // 차트용 일별 데이터
+  const { data: chartData } = await supabase
     .from('waste_logs')
     .select('log_date, direction, weight_kg')
-    .gte('log_date', getLast14Days()[0])
+    .gte('log_date', period.chartFromDate)
+    .lte('log_date', period.chartToDate)
     .neq('status', 'archived');
 
+  // 최근 5건 (글로벌)
   const { data: recent } = await supabase
     .from('waste_logs')
     .select(
@@ -152,8 +227,8 @@ export default async function DashboardPage() {
     pendingCount = count ?? 0;
   }
 
-  const thisRows = (thisMonth ?? []) as unknown as MonthRow[];
-  const prevRows = (prevMonth ?? []) as PrevRow[];
+  const thisRows = (thisData ?? []) as unknown as MonthRow[];
+  const prevRows = (prevData ?? []) as PrevRow[];
 
   const inStats = aggregate(thisRows, 'in');
   const outStats = aggregate(thisRows, 'out');
@@ -161,17 +236,22 @@ export default async function DashboardPage() {
   const prevOutStats = aggregate(prevRows, 'out');
 
   type DayRow = { log_date: string; direction: Direction; weight_kg: number | null };
-  const last14Rows = (last14 ?? []) as DayRow[];
+  const chartRows = (chartData ?? []) as DayRow[];
   const dayMap = new Map<string, { inKg: number; outKg: number }>();
-  for (const d of getLast14Days()) dayMap.set(d, { inKg: 0, outKg: 0 });
-  for (const r of last14Rows) {
+  for (const d of enumerateDays(period.chartFromDate, period.chartToDate)) {
+    dayMap.set(d, { inKg: 0, outKg: 0 });
+  }
+  for (const r of chartRows) {
     const bucket = dayMap.get(r.log_date);
     if (!bucket) continue;
     const w = Number(r.weight_kg ?? 0);
     if (r.direction === 'in') bucket.inKg += w;
     else bucket.outKg += w;
   }
-  const buckets: DailyBucket[] = getLast14Days().map((date) => ({
+  const buckets: DailyBucket[] = enumerateDays(
+    period.chartFromDate,
+    period.chartToDate,
+  ).map((date) => ({
     date,
     inKg: dayMap.get(date)!.inKg,
     outKg: dayMap.get(date)!.outKg,
@@ -180,12 +260,24 @@ export default async function DashboardPage() {
   const topInCompanies = buildTop5(thisRows, 'in');
   const topOutCompanies = buildTop5(thisRows, 'out');
 
+  const periodSubtitle =
+    period.mode === 'daily'
+      ? `${period.label} 일간 · 직전일 대비`
+      : `${period.label} 월간 · 직전월 대비`;
+
   return (
     <>
       <PageHeader
         title="대시보드"
-        subtitle={`${monthLabel} 운영 요약`}
+        subtitle={periodSubtitle}
         breadcrumb={[{ label: '에이스알앤씨' }, { label: '대시보드' }]}
+        actions={
+          <DashboardPeriodPicker
+            mode={period.mode}
+            date={period.mode === 'daily' ? period.start : ''}
+            month={period.mode === 'monthly' ? period.start.slice(0, 7) : ''}
+          />
+        }
       />
       <div className="flex-1 space-y-5 overflow-y-auto p-7">
         {pendingCount !== null && pendingCount > 0 && (
@@ -210,14 +302,14 @@ export default async function DashboardPage() {
           </Link>
         )}
 
-        {/* 반입 (매출) — 거래처에게 청구 */}
+        {/* 반입 (매출) */}
         <section className="space-y-3">
           <div className="flex items-baseline justify-between">
             <h2 className="text-[13px] font-semibold tracking-tight">
               반입 <span className="text-foreground-muted">(매출 · 거래처 청구)</span>
             </h2>
             <Link
-              href="/logs?direction=in"
+              href={`/logs?direction=in&from=${period.start}&to=${period.end}`}
               className="text-[11.5px] text-foreground-muted hover:underline"
             >
               반입 일보 보기 →
@@ -227,7 +319,7 @@ export default async function DashboardPage() {
             <StatCard
               label="반입 건수"
               value={formatNumber(inStats.count)}
-              hint={monthLabel}
+              hint={period.label}
               delta={calcDelta(inStats.count, prevInStats.count)}
             />
             <StatCard
@@ -253,14 +345,14 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        {/* 반출 (매입) — 처리장에 지급 */}
+        {/* 반출 (매입) */}
         <section className="space-y-3">
           <div className="flex items-baseline justify-between">
             <h2 className="text-[13px] font-semibold tracking-tight">
               반출 <span className="text-foreground-muted">(매입 · 처리장 지급)</span>
             </h2>
             <Link
-              href="/logs?direction=out"
+              href={`/logs?direction=out&from=${period.start}&to=${period.end}`}
               className="text-[11.5px] text-foreground-muted hover:underline"
             >
               반출 일보 보기 →
@@ -270,7 +362,7 @@ export default async function DashboardPage() {
             <StatCard
               label="반출 건수"
               value={formatNumber(outStats.count)}
-              hint={monthLabel}
+              hint={period.label}
               delta={calcDelta(outStats.count, prevOutStats.count)}
             />
             <StatCard
@@ -296,10 +388,17 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        {/* 차트 + Top5 (반입/반출 분리) */}
+        {/* 차트 + Top5 */}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_320px]">
           <div className="rounded-[10px] border border-border bg-surface p-5 shadow-sm">
-            <InOutChart buckets={buckets} />
+            <InOutChart
+              buckets={buckets}
+              title={
+                period.mode === 'daily'
+                  ? `최근 14일 반입·반출 (${period.label} 기준)`
+                  : `${period.label} 일별 반입·반출`
+              }
+            />
           </div>
           <div className="space-y-3">
             <TopCompaniesCard items={topInCompanies} title="매출 Top 5 (반입)" />

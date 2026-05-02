@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Save, RotateCcw, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,7 +64,8 @@ function toRowState(log: EditableLog): RowState {
   };
 }
 
-function statesEqual(a: RowState, b: RowState): boolean {
+function statesEqual(a: RowState | undefined, b: RowState | undefined): boolean {
+  if (!a || !b) return a === b;
   return (
     a.weight_kg === b.weight_kg &&
     a.unit_price === b.unit_price &&
@@ -96,6 +97,12 @@ export function EditableInvoiceTable({ logs }: Props) {
   const [reason, setReason] = useState('');
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<BulkUpdateResult | null>(null);
+
+  // logs prop 이 바뀌면 state 재초기화 (다른 거래처·기간 조회 시 row id 가 달라짐)
+  useEffect(() => {
+    setState({ ...initial });
+    setResult(null);
+  }, [initial]);
 
   const dirtyIds = useMemo(
     () => logs.map((l) => l.id).filter((id) => !statesEqual(state[id], initial[id])),
@@ -149,7 +156,8 @@ export function EditableInvoiceTable({ logs }: Props) {
   const totalCalc = useMemo(() => {
     return logs.reduce(
       (s, l) => {
-        const rs = state[l.id];
+        const rs = state[l.id] ?? initial[l.id];
+        if (!rs) return s;
         const c = calcBilling({
           billingType: rs.billing_type,
           weightKg: rs.weight_kg ? Number(rs.weight_kg) : 0,
@@ -197,7 +205,9 @@ export function EditableInvoiceTable({ logs }: Props) {
           </thead>
           <tbody>
             {logs.map((l) => {
-              const s = state[l.id];
+              // state 가 아직 초기화 안 된 경우 (logs prop 바뀐 직후 첫 렌더) initial fallback
+              const s = state[l.id] ?? initial[l.id];
+              if (!s) return null;
               const isDirty = !statesEqual(s, initial[l.id]);
               const c = calcBilling({
                 billingType: s.billing_type,

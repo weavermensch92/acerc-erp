@@ -31,13 +31,13 @@ export async function markCompanyInvoicedAction(
   if (range?.from) q = q.gte('log_date', range.from);
   if (range?.to) q = q.lte('log_date', range.to);
 
-  const { error, count } = await q.select('id', { count: 'exact' });
+  const { data, error } = await q.select('id');
   if (error) return { ok: false, error: error.message };
   revalidatePath('/pending');
   revalidatePath('/dashboard');
   revalidatePath(`/companies/${companyId}`);
   revalidatePath('/invoices');
-  return { ok: true, updated: count ?? 0 };
+  return { ok: true, updated: data?.length ?? 0 };
 }
 
 export async function markLogsInvoicedAction(
@@ -45,14 +45,14 @@ export async function markLogsInvoicedAction(
 ): Promise<PendingResult> {
   if (ids.length === 0) return { ok: true, updated: 0 };
   const supabase = createClient();
-  const { error, count } = await supabase
+  const { data, error } = await supabase
     .from('waste_logs')
     .update({ is_invoiced: true })
     .in('id', ids)
-    .select('id', { count: 'exact' });
+    .select('id');
   if (error) return { ok: false, error: error.message };
   revalidatePath('/pending');
   revalidatePath('/dashboard');
   revalidatePath('/invoices');
-  return { ok: true, updated: count ?? 0 };
+  return { ok: true, updated: data?.length ?? 0 };
 }

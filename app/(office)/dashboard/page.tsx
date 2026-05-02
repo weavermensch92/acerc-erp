@@ -294,9 +294,10 @@ export default async function DashboardPage({
             <StatCard
               label="미청구"
               value={formatNumber(inStats.uninvoiced)}
-              hint="명세표 미발급"
+              hint="명세표 미발급 — 클릭 시 처리"
               tone={inStats.uninvoiced > 0 ? 'warning' : 'neutral'}
               delta={calcDelta(inStats.uninvoiced, prevInStats.uninvoiced)}
+              href={`/pending?type=in&from=${period.from}&to=${period.to}`}
             />
             <StatCard
               label="미수금"
@@ -337,9 +338,10 @@ export default async function DashboardPage({
             <StatCard
               label="미정산"
               value={formatNumber(outStats.uninvoiced)}
-              hint="청구서 미수령"
+              hint="청구서 미수령 — 클릭 시 처리"
               tone={outStats.uninvoiced > 0 ? 'warning' : 'neutral'}
               delta={calcDelta(outStats.uninvoiced, prevOutStats.uninvoiced)}
+              href={`/pending?type=out&from=${period.from}&to=${period.to}`}
             />
             <StatCard
               label="미지급"

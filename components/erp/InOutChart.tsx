@@ -7,12 +7,13 @@ export interface DailyBucket {
 }
 
 interface Props {
-  buckets: DailyBucket[]; // 14일치 가정
+  buckets: DailyBucket[];
   height?: number;
+  title?: string;
 }
 
 // SVG 직접 — recharts 의존성 회피, 번들 가벼움
-export function InOutChart({ buckets, height = 160 }: Props) {
+export function InOutChart({ buckets, height = 160, title = '반입·반출' }: Props) {
   const max = Math.max(1, ...buckets.flatMap((b) => [b.inKg, b.outKg]));
   const totalIn = buckets.reduce((s, b) => s + b.inKg, 0);
   const totalOut = buckets.reduce((s, b) => s + b.outKg, 0);
@@ -30,7 +31,7 @@ export function InOutChart({ buckets, height = 160 }: Props) {
     <div className="space-y-3">
       <div className="flex items-baseline justify-between">
         <div className="flex flex-col">
-          <span className="text-[13px] font-semibold tracking-tight">최근 14일 반입·반출</span>
+          <span className="text-[13px] font-semibold tracking-tight">{title}</span>
           <span className="text-[11px] text-foreground-muted">단위: kg</span>
         </div>
         <div className="flex items-center gap-3 text-[11px]">

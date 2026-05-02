@@ -318,15 +318,15 @@ function PartyBox({
         </tbody>
       </table>
       {stampName !== undefined && (
-        <div className="relative mt-auto flex items-center justify-between border-t border-foreground px-2 py-2 print:border-black">
+        <div className="relative mt-auto flex min-h-[72px] items-center justify-between border-t border-foreground px-3 py-3 print:border-black">
           <span className="text-foreground-muted print:text-gray-700">서명</span>
-          <span className="font-medium">{stampName} (인)</span>
+          <span className="pr-16 font-medium">{stampName} (인)</span>
           {stampUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={stampUrl}
               alt="날인"
-              className="absolute right-2 top-1/2 h-12 w-12 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
+              className="absolute right-3 top-1/2 h-16 w-16 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
             />
           )}
         </div>

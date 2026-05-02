@@ -147,7 +147,7 @@ export async function deleteTreatmentPlantAction(
   if (usage > 0 && !options?.detachLogs) {
     return {
       ok: false,
-      error: `이 처리장을 사용하는 일보가 ${usage}건 있습니다. 일보의 처리장 연결을 해제 후 삭제하려면 'detachLogs' 옵션을 사용하세요`,
+      error: `이 처리장을 사용하는 일보가 ${usage}건 있습니다 (보관 상태 포함). 다이얼로그에서 "연결 해제 후 처리장 삭제" 버튼으로 진행하세요`,
     };
   }
 
@@ -176,6 +176,7 @@ export interface PlantUsageLog {
   direction: 'in' | 'out';
   vehicle_no: string | null;
   weight_kg: number | null;
+  status: string;
   companies: { name: string } | null;
   waste_types: { name: string } | null;
 }
@@ -189,7 +190,7 @@ export async function getTreatmentPlantUsageAction(
     supabase
       .from('waste_logs')
       .select(
-        `id, log_date, direction, vehicle_no, weight_kg,
+        `id, log_date, direction, vehicle_no, weight_kg, status,
          companies(name), waste_types(name)`,
       )
       .eq('treatment_plant_id', id)

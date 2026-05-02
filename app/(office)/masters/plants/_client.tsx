@@ -312,21 +312,36 @@ function DeleteDialog({
                     </tr>
                   </thead>
                   <tbody>
-                    {logs.map((l) => (
-                      <tr key={l.id} className="border-b border-divider last:border-0">
-                        <td className="px-2 py-1 font-mono">{formatDate(l.log_date)}</td>
-                        <td className="px-2 py-1">
-                          <Pill tone={l.direction === 'in' ? 'info' : 'primary'}>
-                            {directionLabel(l.direction)}
-                          </Pill>
-                        </td>
-                        <td className="px-2 py-1">{l.companies?.name ?? '—'}</td>
-                        <td className="px-2 py-1">{l.waste_types?.name ?? '—'}</td>
-                        <td className="px-2 py-1 text-right font-mono">
-                          {formatKg(l.weight_kg)}
-                        </td>
-                      </tr>
-                    ))}
+                    {logs.map((l) => {
+                      const isArchived = l.status === 'archived';
+                      return (
+                        <tr
+                          key={l.id}
+                          className={`border-b border-divider last:border-0 ${
+                            isArchived ? 'opacity-60' : ''
+                          }`}
+                        >
+                          <td className="px-2 py-1 font-mono">
+                            {formatDate(l.log_date)}
+                          </td>
+                          <td className="px-2 py-1">
+                            <div className="flex items-center gap-1">
+                              <Pill tone={l.direction === 'in' ? 'info' : 'primary'}>
+                                {directionLabel(l.direction)}
+                              </Pill>
+                              {isArchived && (
+                                <Pill tone="neutral">보관</Pill>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-2 py-1">{l.companies?.name ?? '—'}</td>
+                          <td className="px-2 py-1">{l.waste_types?.name ?? '—'}</td>
+                          <td className="px-2 py-1 text-right font-mono">
+                            {formatKg(l.weight_kg)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {total > logs.length && (

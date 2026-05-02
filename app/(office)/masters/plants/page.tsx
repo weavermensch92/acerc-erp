@@ -13,10 +13,10 @@ export default async function TreatmentPlantsPage() {
     .select('*')
     .order('name');
 
+  // 사용 건수는 archived 포함해서 카운트 — FK 제약상 archived 일보도 처리장 삭제를 막기 때문
   const { data: counts } = await supabase
     .from('waste_logs')
     .select('treatment_plant_id')
-    .neq('status', 'archived')
     .not('treatment_plant_id', 'is', null);
 
   const usageMap: Record<string, number> = {};

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, X, Grid3x3, Download, Upload } from 'lucide-react';
+import { Plus, X, Grid3x3, Download, Upload, CalendarDays, History } from 'lucide-react';
 import { PageHeader } from '@/components/erp/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,8 @@ import type { LogStatus } from '@/lib/types/database';
 export const dynamic = 'force-dynamic';
 
 interface SearchParams {
+  view?: string; // 'daily' (default) | 'range'
+  date?: string; // YYYY-MM-DD (daily mode)
   status?: string;
   from?: string;
   to?: string;
@@ -37,6 +39,12 @@ const statusFiltersWithoutReview: Array<{
   { id: 'archived', label: '보관(삭제)', value: 'archived' },
 ];
 
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+function isValidDate(s?: string): boolean {
+  return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
 export default async function LogsPage({
   searchParams,
 }: {
@@ -45,6 +53,14 @@ export default async function LogsPage({
   const supabase = createClient();
   const reviewEnabled = await getReviewProcessEnabled();
   const statusFilters = reviewEnabled ? statusFiltersAll : statusFiltersWithoutReview;
+
+  // 뷰 모드: 디폴트 = daily (오늘)
+  const view = searchParams.view === 'range' ? 'range' : 'daily';
+  const dailyDate = isValidDate(searchParams.date) ? searchParams.date! : todayIso();
+
+  // 일일 뷰의 경우 from/to 를 그 날짜 하루로 강제
+  const effectiveFrom = view === 'daily' ? dailyDate : searchParams.from;
+  const effectiveTo = view === 'daily' ? dailyDate : searchParams.to;
 
   // 거래처 목록 (필터 select 용 — 활성만)
   const { data: companiesData } = await supabase
@@ -62,7 +78,7 @@ export default async function LogsPage({
     )
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(100);
+    .limit(view === 'daily' ? 200 : 100);
 
   // archived 명시 시만 보임. 미명시 시 archived 자동 제외
   if (searchParams.status) {
@@ -70,8 +86,8 @@ export default async function LogsPage({
   } else {
     query = query.neq('status', 'archived');
   }
-  if (searchParams.from) query = query.gte('log_date', searchParams.from);
-  if (searchParams.to) query = query.lte('log_date', searchParams.to);
+  if (effectiveFrom) query = query.gte('log_date', effectiveFrom);
+  if (effectiveTo) query = query.lte('log_date', effectiveTo);
   if (searchParams.company) query = query.eq('company_id', searchParams.company);
   if (searchParams.direction === 'in' || searchParams.direction === 'out') {
     query = query.eq('direction', searchParams.direction);
@@ -94,9 +110,11 @@ export default async function LogsPage({
 
   const buildHref = (statusValue?: string) => {
     const params = new URLSearchParams();
+    if (view === 'range') params.set('view', 'range');
+    if (view === 'daily') params.set('date', dailyDate);
     if (statusValue) params.set('status', statusValue);
-    if (searchParams.from) params.set('from', searchParams.from);
-    if (searchParams.to) params.set('to', searchParams.to);
+    if (view === 'range' && searchParams.from) params.set('from', searchParams.from);
+    if (view === 'range' && searchParams.to) params.set('to', searchParams.to);
     if (searchParams.company) params.set('company', searchParams.company);
     if (searchParams.direction) params.set('direction', searchParams.direction);
     if (searchParams.plant) params.set('plant', searchParams.plant);
@@ -106,11 +124,27 @@ export default async function LogsPage({
 
   const buildDirectionHref = (directionValue?: string) => {
     const params = new URLSearchParams();
+    if (view === 'range') params.set('view', 'range');
+    if (view === 'daily') params.set('date', dailyDate);
     if (directionValue) params.set('direction', directionValue);
     if (searchParams.status) params.set('status', searchParams.status);
-    if (searchParams.from) params.set('from', searchParams.from);
-    if (searchParams.to) params.set('to', searchParams.to);
+    if (view === 'range' && searchParams.from) params.set('from', searchParams.from);
+    if (view === 'range' && searchParams.to) params.set('to', searchParams.to);
     if (searchParams.company) params.set('company', searchParams.company);
+    if (searchParams.plant) params.set('plant', searchParams.plant);
+    const q = params.toString();
+    return q ? `/logs?${q}` : '/logs';
+  };
+
+  const buildViewHref = (newView: 'daily' | 'range') => {
+    const params = new URLSearchParams();
+    if (newView === 'range') params.set('view', 'range');
+    // daily 는 디폴트라 view 파라미터 생략 가능
+    if (newView === 'daily') params.set('date', dailyDate);
+    // 다른 필터는 보존
+    if (searchParams.status) params.set('status', searchParams.status);
+    if (searchParams.company) params.set('company', searchParams.company);
+    if (searchParams.direction) params.set('direction', searchParams.direction);
     if (searchParams.plant) params.set('plant', searchParams.plant);
     const q = params.toString();
     return q ? `/logs?${q}` : '/logs';
@@ -122,7 +156,8 @@ export default async function LogsPage({
     !!searchParams.to ||
     !!searchParams.company ||
     !!searchParams.direction ||
-    !!searchParams.plant;
+    !!searchParams.plant ||
+    view === 'range';
 
   const selectedPlantName = searchParams.plant
     ? (
@@ -138,24 +173,37 @@ export default async function LogsPage({
     ? companies.find((c) => c.id === searchParams.company)?.name
     : null;
 
+  // 일일 뷰 — 일자 ±1 navigation
+  const dayDate = new Date(dailyDate + 'T00:00:00');
+  const prevDay = new Date(dayDate);
+  prevDay.setDate(prevDay.getDate() - 1);
+  const nextDay = new Date(dayDate);
+  nextDay.setDate(nextDay.getDate() + 1);
+  const prevDayIso = prevDay.toISOString().slice(0, 10);
+  const nextDayIso = nextDay.toISOString().slice(0, 10);
+
   return (
     <>
       <PageHeader
         title="폐기물일보"
-        subtitle="반입 / 반출 일보 목록"
+        subtitle={
+          view === 'daily'
+            ? `${dailyDate} 일일 일보 (${rows.length}건)`
+            : '반입 / 반출 일보 — 기간 조회'
+        }
         breadcrumb={[{ label: '에이스알앤씨' }, { label: '폐기물일보' }]}
         actions={
           <>
             <a
               href={`/api/logs/export?${new URLSearchParams({
-                ...(searchParams.from ? { from: searchParams.from } : {}),
-                ...(searchParams.to ? { to: searchParams.to } : {}),
+                ...(effectiveFrom ? { from: effectiveFrom } : {}),
+                ...(effectiveTo ? { to: effectiveTo } : {}),
               }).toString()}`}
               target="_blank"
               rel="noopener"
               title={
-                searchParams.from || searchParams.to
-                  ? `${searchParams.from ?? '전체'} ~ ${searchParams.to ?? '전체'} 범위 다운로드`
+                effectiveFrom || effectiveTo
+                  ? `${effectiveFrom ?? '전체'} ~ ${effectiveTo ?? '전체'} 범위 다운로드`
                   : '전체 일보 다운로드'
               }
             >
@@ -185,6 +233,86 @@ export default async function LogsPage({
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
+        {/* 뷰 탭: 일일 / 전체 기간 */}
+        <div className="flex flex-shrink-0 items-center gap-1 border-b border-border bg-surface px-7 pt-3">
+          <Link
+            href={buildViewHref('daily')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-t-md border-b-2 px-3 py-2 text-[12.5px] font-medium transition-colors',
+              view === 'daily'
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-foreground-muted hover:text-foreground-secondary',
+            )}
+          >
+            <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.75} />
+            일일 일보
+          </Link>
+          <Link
+            href={buildViewHref('range')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-t-md border-b-2 px-3 py-2 text-[12.5px] font-medium transition-colors',
+              view === 'range'
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-foreground-muted hover:text-foreground-secondary',
+            )}
+          >
+            <History className="h-3.5 w-3.5" strokeWidth={1.75} />
+            기간 조회
+          </Link>
+        </div>
+
+        {/* 일일 뷰 — 일자 선택 + 좌우 이동 */}
+        {view === 'daily' && (
+          <form
+            method="get"
+            className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface px-7 py-3"
+          >
+            {/* 다른 필터 보존을 위한 hidden */}
+            {searchParams.status && (
+              <input type="hidden" name="status" value={searchParams.status} />
+            )}
+            {searchParams.direction && (
+              <input type="hidden" name="direction" value={searchParams.direction} />
+            )}
+            {searchParams.company && (
+              <input type="hidden" name="company" value={searchParams.company} />
+            )}
+            {searchParams.plant && (
+              <input type="hidden" name="plant" value={searchParams.plant} />
+            )}
+            <Link
+              href={buildViewHref('daily').replace(`date=${dailyDate}`, `date=${prevDayIso}`)}
+              className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium hover:bg-background-subtle"
+            >
+              ← 이전일
+            </Link>
+            <Input
+              type="date"
+              name="date"
+              defaultValue={dailyDate}
+              max={todayIso()}
+              className="w-[150px]"
+            />
+            <Button type="submit" size="sm" variant="outline">
+              조회
+            </Button>
+            <Link
+              href={buildViewHref('daily').replace(`date=${dailyDate}`, `date=${nextDayIso}`)}
+              className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium hover:bg-background-subtle"
+            >
+              다음일 →
+            </Link>
+            {dailyDate !== todayIso() && (
+              <Link
+                href={buildViewHref('daily').replace(`date=${dailyDate}`, `date=${todayIso()}`)}
+                className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium hover:bg-background-subtle"
+              >
+                오늘
+              </Link>
+            )}
+          </form>
+        )}
+
         {/* 상태 칩 (숫자 표시) */}
         <div className="flex flex-shrink-0 items-center gap-2 border-b border-border bg-surface px-7 py-3">
           <span className="mr-1 text-[11.5px] text-foreground-muted">상태</span>
@@ -246,7 +374,7 @@ export default async function LogsPage({
           })}
         </div>
 
-        {/* 추가 필터 (거래처 + 기간) — GET form */}
+        {/* 추가 필터 (거래처 + 기간) — 기간 뷰에서만 from/to 노출 */}
         <form
           method="get"
           className="flex flex-shrink-0 flex-wrap items-end gap-3 border-b border-border bg-surface px-7 py-3"
@@ -260,6 +388,7 @@ export default async function LogsPage({
           {searchParams.plant && (
             <input type="hidden" name="plant" value={searchParams.plant} />
           )}
+          {view === 'range' && <input type="hidden" name="view" value="range" />}
           <div className="space-y-1">
             <label className="text-[10.5px] text-foreground-muted">거래처</label>
             <Select name="company" defaultValue={searchParams.company ?? ''} className="min-w-[180px]">
@@ -271,14 +400,18 @@ export default async function LogsPage({
               ))}
             </Select>
           </div>
-          <div className="space-y-1">
-            <label className="text-[10.5px] text-foreground-muted">시작일</label>
-            <Input type="date" name="from" defaultValue={searchParams.from ?? ''} className="w-[150px]" />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10.5px] text-foreground-muted">종료일</label>
-            <Input type="date" name="to" defaultValue={searchParams.to ?? ''} className="w-[150px]" />
-          </div>
+          {view === 'range' && (
+            <>
+              <div className="space-y-1">
+                <label className="text-[10.5px] text-foreground-muted">시작일</label>
+                <Input type="date" name="from" defaultValue={searchParams.from ?? ''} className="w-[150px]" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10.5px] text-foreground-muted">종료일</label>
+                <Input type="date" name="to" defaultValue={searchParams.to ?? ''} className="w-[150px]" />
+              </div>
+            </>
+          )}
           <Button type="submit" size="sm" variant="outline">
             적용
           </Button>
@@ -306,10 +439,20 @@ export default async function LogsPage({
         </form>
 
         <div className="flex-1 overflow-y-auto p-7">
-          <LogsTable rows={rows} />
+          {view === 'daily' && rows.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border bg-surface p-10 text-center">
+              <p className="text-sm text-foreground-muted">
+                {dailyDate} 일자에 등록된 일보가 없습니다.
+              </p>
+              <p className="mt-2 text-[11px] text-foreground-muted">
+                새 일보를 입력하거나 다른 날짜를 선택해주세요.
+              </p>
+            </div>
+          ) : (
+            <LogsTable rows={rows} />
+          )}
         </div>
       </div>
     </>
   );
 }
-

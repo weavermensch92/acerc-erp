@@ -261,8 +261,8 @@ export default async function LogsPage({
           </Link>
         </div>
 
-        {/* 통합 필터 바 — 데스크탑 가로 정렬, 모바일 세로 wrap */}
-        <div className="flex flex-shrink-0 flex-col gap-3 border-b border-border bg-surface px-7 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-6 lg:gap-y-2">
+        {/* 통합 필터 바 — 데스크탑 가로 정렬, 모바일 세로 wrap. 그룹 간 넓은 간격 */}
+        <div className="flex flex-shrink-0 flex-col gap-3 border-b border-border bg-surface px-7 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-10 lg:gap-y-3">
           {/* 일일 일자 선택 (일일 뷰만) */}
           {view === 'daily' && (
             <form method="get" className="flex flex-wrap items-center gap-1.5">
@@ -339,8 +339,8 @@ export default async function LogsPage({
           )}
 
           {/* 상태 칩 */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-foreground-muted">상태</span>
+          <div className="flex flex-nowrap items-center gap-1.5">
+            <span className="text-[12.5px] font-medium text-foreground-secondary">상태</span>
             {statusFilters.map((f) => {
               const active = (searchParams.status ?? 'all') === (f.value ?? 'all');
               const count = statusCounts[f.value ?? 'all'] ?? 0;
@@ -372,8 +372,8 @@ export default async function LogsPage({
           </div>
 
           {/* 구분 칩 */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-foreground-muted">구분</span>
+          <div className="flex flex-nowrap items-center gap-1.5">
+            <span className="text-[12.5px] font-medium text-foreground-secondary">구분</span>
             {(
               [
                 { id: 'all', label: '전체', value: undefined },
@@ -400,7 +400,7 @@ export default async function LogsPage({
           </div>
 
           {/* 거래처 select */}
-          <form method="get" className="flex flex-wrap items-center gap-1.5">
+          <form method="get" className="flex flex-nowrap items-center gap-1.5">
             {searchParams.status && (
               <input type="hidden" name="status" value={searchParams.status} />
             )}
@@ -420,11 +420,11 @@ export default async function LogsPage({
             {view === 'range' && searchParams.to && (
               <input type="hidden" name="to" value={searchParams.to} />
             )}
-            <span className="text-[11px] text-foreground-muted">거래처</span>
+            <span className="text-[12.5px] font-medium text-foreground-secondary">거래처</span>
             <Select
               name="company"
               defaultValue={searchParams.company ?? ''}
-              className="h-7 min-w-[160px] text-xs"
+              className="h-7 min-w-[180px] text-xs"
             >
               <option value="">전체</option>
               {companies.map((c) => (

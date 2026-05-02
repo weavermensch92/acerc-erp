@@ -340,7 +340,7 @@ export default async function LogsPage({
 
           {/* 상태 칩 */}
           <div className="flex flex-nowrap items-center gap-1.5">
-            <span className="text-[12.5px] font-medium text-foreground-secondary">상태</span>
+            <span className="whitespace-nowrap text-[12.5px] font-medium text-foreground-secondary">상태</span>
             {statusFilters.map((f) => {
               const active = (searchParams.status ?? 'all') === (f.value ?? 'all');
               const count = statusCounts[f.value ?? 'all'] ?? 0;
@@ -373,7 +373,7 @@ export default async function LogsPage({
 
           {/* 구분 칩 */}
           <div className="flex flex-nowrap items-center gap-1.5">
-            <span className="text-[12.5px] font-medium text-foreground-secondary">구분</span>
+            <span className="whitespace-nowrap text-[12.5px] font-medium text-foreground-secondary">구분</span>
             {(
               [
                 { id: 'all', label: '전체', value: undefined },
@@ -420,11 +420,11 @@ export default async function LogsPage({
             {view === 'range' && searchParams.to && (
               <input type="hidden" name="to" value={searchParams.to} />
             )}
-            <span className="text-[12.5px] font-medium text-foreground-secondary">거래처</span>
+            <span className="whitespace-nowrap text-[12.5px] font-medium text-foreground-secondary">거래처</span>
             <Select
               name="company"
               defaultValue={searchParams.company ?? ''}
-              className="h-7 min-w-[180px] text-xs"
+              className="h-9 min-w-[200px] text-[13px]"
             >
               <option value="">전체</option>
               {companies.map((c) => (

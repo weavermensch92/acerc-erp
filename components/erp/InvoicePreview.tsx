@@ -354,9 +354,7 @@ function SignatureBox({
           className="absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
         />
       )}
-      <div className="mt-6 text-right text-[10px] text-foreground-muted print:text-gray-600">
-        (서명 또는 인)
-      </div>
+      <div className="mt-6 h-4" />
     </div>
   );
 }

@@ -216,7 +216,6 @@ function SignatureRow({
           className="absolute right-12 top-1/2 h-8 w-8 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
         />
       )}
-      <span className="text-[9px] text-foreground-muted">(서명)</span>
     </div>
   );
 }

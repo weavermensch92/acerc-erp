@@ -99,6 +99,7 @@ export default async function SharePage({ params, searchParams }: SharePageProps
   const { start, end, label, paramKey } = getMonthRange(searchParams.month);
 
   // 2) 해당 거래처 일보만 명시적 컬럼 SELECT (다른 거래처 정보 leak 방지)
+  //    반입(매출)만 — 반출은 자사가 처리장에 지급하는 매입이므로 거래처 셀프 페이지에 노출 X
   const { data: logs } = await admin
     .from('waste_logs')
     .select(
@@ -108,6 +109,7 @@ export default async function SharePage({ params, searchParams }: SharePageProps
        sites(name), waste_types(name)`,
     )
     .eq('company_id', company.id)
+    .eq('direction', 'in')
     .neq('status', 'archived')
     .gte('log_date', start)
     .lte('log_date', end)

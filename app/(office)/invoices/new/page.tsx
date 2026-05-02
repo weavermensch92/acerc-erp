@@ -61,6 +61,7 @@ export default async function NewBatchPage({
     .select('company_id, total_amount, is_paid, is_invoiced')
     .gte('log_date', from)
     .lte('log_date', to)
+    .eq('direction', 'in')
     .eq('status', 'active');
 
   type Log = {

@@ -263,14 +263,15 @@ export function InvoicePreview({
           </p>
         )}
 
-        {/* 서명란 */}
-        <div className="mt-8 grid grid-cols-2 gap-6 text-xs">
-          <SignatureBox label="공급받는자" name={company.name} />
-          <SignatureBox
-            label="공급자"
-            name={selfCompany.name}
-            stampUrl={selfCompany.stamp_url ?? null}
-          />
+        {/* 서명란 — 공급자(자사)만 (공급받는자 측 서명란 제거) */}
+        <div className="mt-8 flex justify-end text-xs">
+          <div className="w-1/2">
+            <SignatureBox
+              label="공급자"
+              name={selfCompany.name}
+              stampUrl={selfCompany.stamp_url ?? null}
+            />
+          </div>
         </div>
 
         <p className="mt-6 text-center text-[10px] text-foreground-muted print:text-gray-600">

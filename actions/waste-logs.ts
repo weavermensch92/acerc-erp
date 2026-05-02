@@ -343,6 +343,7 @@ export async function bulkUpdateLogsInlineAction(
   revalidatePath('/logs');
   revalidatePath('/dashboard');
   revalidatePath('/invoices');
+  revalidatePath('/payouts');
 
   return { ok: failed.length === 0, updated, failed };
 }

@@ -7,6 +7,7 @@ import {
   List,
   Users,
   Receipt,
+  CreditCard,
   Database,
   Calendar,
   Settings,
@@ -26,6 +27,7 @@ const navItems = [
   { id: 'logs', label: '폐기물일보', href: '/logs', icon: List, enabled: true, hasBadge: true },
   { id: 'companies', label: '거래처', href: '/companies', icon: Users, enabled: true },
   { id: 'invoices', label: '거래명세표', href: '/invoices', icon: Receipt, enabled: true },
+  { id: 'payouts', label: '지급관리', href: '/payouts', icon: CreditCard, enabled: true },
   { id: 'masters', label: '마스터', href: '/masters', icon: Database, enabled: true },
   { id: 'snapshots', label: '스냅샷', href: '/snapshots', icon: Calendar, enabled: true },
   { id: 'settings', label: '설정', href: '/settings', icon: Settings, enabled: true },
@@ -34,13 +36,11 @@ const navItems = [
 function detectActive(pathname: string): string | null {
   if (pathname.startsWith('/settings')) return 'settings';
   if (pathname.startsWith('/invoices')) return 'invoices';
+  if (pathname.startsWith('/payouts')) return 'payouts';
   if (pathname.startsWith('/companies')) return 'companies';
   if (pathname.startsWith('/masters')) return 'masters';
   if (pathname.startsWith('/dashboard')) return 'dashboard';
   if (pathname.startsWith('/logs')) return 'logs';
-  if (pathname.startsWith('/companies')) return 'companies';
-  if (pathname.startsWith('/invoices')) return 'invoices';
-  if (pathname.startsWith('/masters')) return 'masters';
   if (pathname.startsWith('/snapshots')) return 'snapshots';
   return null;
 }

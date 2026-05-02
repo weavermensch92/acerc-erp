@@ -263,15 +263,14 @@ export function InvoicePreview({
           </p>
         )}
 
-        {/* 서명란 — 공급자(자사)만 (공급받는자 측 서명란 제거) */}
-        <div className="mt-8 flex justify-end text-xs">
-          <div className="w-1/2">
-            <SignatureBox
-              label="공급자"
-              name={selfCompany.name}
-              stampUrl={selfCompany.stamp_url ?? null}
-            />
-          </div>
+        {/* 서명란 — 공급받는자 박스는 유지하되 "(서명 또는 인)" 문구만 제거 */}
+        <div className="mt-8 grid grid-cols-2 gap-6 text-xs">
+          <SignatureBox label="공급받는자" name={company.name} hideSignatureHint />
+          <SignatureBox
+            label="공급자"
+            name={selfCompany.name}
+            stampUrl={selfCompany.stamp_url ?? null}
+          />
         </div>
 
         <p className="mt-6 text-center text-[10px] text-foreground-muted print:text-gray-600">
@@ -338,10 +337,12 @@ function SignatureBox({
   label,
   name,
   stampUrl,
+  hideSignatureHint = false,
 }: {
   label: string;
   name: string;
   stampUrl?: string | null;
+  hideSignatureHint?: boolean;
 }) {
   return (
     <div className="relative border border-foreground p-3 print:border-black">
@@ -355,9 +356,13 @@ function SignatureBox({
           className="absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
         />
       )}
-      <div className="mt-6 text-right text-[10px] text-foreground-muted print:text-gray-600">
-        (서명 또는 인)
-      </div>
+      {hideSignatureHint ? (
+        <div className="mt-6" aria-hidden="true" />
+      ) : (
+        <div className="mt-6 text-right text-[10px] text-foreground-muted print:text-gray-600">
+          (서명 또는 인)
+        </div>
+      )}
     </div>
   );
 }

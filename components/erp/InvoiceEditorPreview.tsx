@@ -11,6 +11,8 @@ import {
   type InvoiceLog,
   type InvoiceCompanyInfo,
 } from '@/components/erp/InvoicePreview';
+import { ExcelButton } from '@/components/erp/ExcelButton';
+import { downloadInvoiceExcel } from '@/lib/excel/invoice';
 import type { SelfCompanyInfo } from '@/lib/company-info';
 
 interface Props {
@@ -68,6 +70,20 @@ export function InvoiceEditorPreview({ company, selfCompany, period, logs }: Pro
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end print:hidden">
+        <ExcelButton
+          label="엑셀 저장"
+          onExport={() =>
+            downloadInvoiceExcel({
+              company,
+              selfCompany,
+              period,
+              logs: previewLogs as unknown as InvoiceLog[],
+            })
+          }
+        />
+      </div>
+
       <EditableInvoiceTable
         logs={logs}
         selection={{ selectedIds, onToggle, onToggleAll }}

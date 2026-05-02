@@ -89,6 +89,8 @@ export function InvoicePreview({
               ['업태', selfCompany.business_type || '—'],
               ['종목', selfCompany.business_item || '—'],
             ]}
+            stampUrl={selfCompany.stamp_url ?? null}
+            stampName={selfCompany.name}
           />
         </div>
 
@@ -263,27 +265,40 @@ export function InvoicePreview({
           </p>
         )}
 
-        {/* 서명란 */}
-        <div className="mt-8 grid grid-cols-2 gap-6 text-xs">
-          <SignatureBox label="공급받는자" name={company.name} />
-          <SignatureBox
-            label="공급자"
-            name={selfCompany.name}
-            stampUrl={selfCompany.stamp_url ?? null}
-          />
+        {/* 자사 정보 푸터 */}
+        <div className="mt-8 text-center text-xs leading-6">
+          <div className="font-semibold">{selfCompany.name}</div>
+          {selfCompany.address && <div>{selfCompany.address}</div>}
+          {(selfCompany.phone || selfCompany.fax) && (
+            <div>
+              {selfCompany.phone && <span>T.{selfCompany.phone}</span>}
+              {selfCompany.phone && selfCompany.fax && <span>{'  '}</span>}
+              {selfCompany.fax && <span>F.{selfCompany.fax}</span>}
+            </div>
+          )}
         </div>
 
         <p className="mt-6 text-center text-[10px] text-foreground-muted print:text-gray-600">
-          본 명세표는 (주)에이스알앤씨 ERP 시스템에서 자동 발급됩니다 — 발급일 기준 데이터.
+          본 명세표는 {selfCompany.name} ERP 시스템에서 자동 발급됩니다 — 발급일 기준 데이터.
         </p>
       </div>
     </div>
   );
 }
 
-function PartyBox({ title, rows }: { title: string; rows: Array<[string, string]> }) {
+function PartyBox({
+  title,
+  rows,
+  stampUrl,
+  stampName,
+}: {
+  title: string;
+  rows: Array<[string, string]>;
+  stampUrl?: string | null;
+  stampName?: string;
+}) {
   return (
-    <div className="border border-foreground print:border-black">
+    <div className="flex flex-col border border-foreground print:border-black">
       <div className="border-b border-foreground bg-background-subtle px-2 py-1 text-center font-semibold print:border-black print:bg-gray-100">
         {title}
       </div>
@@ -302,6 +317,20 @@ function PartyBox({ title, rows }: { title: string; rows: Array<[string, string]
           ))}
         </tbody>
       </table>
+      {stampName !== undefined && (
+        <div className="relative mt-auto flex items-center justify-between border-t border-foreground px-2 py-2 print:border-black">
+          <span className="text-foreground-muted print:text-gray-700">서명</span>
+          <span className="font-medium">{stampName} (인)</span>
+          {stampUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={stampUrl}
+              alt="날인"
+              className="absolute right-2 top-1/2 h-12 w-12 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -333,28 +362,3 @@ function SummaryBox({
   );
 }
 
-function SignatureBox({
-  label,
-  name,
-  stampUrl,
-}: {
-  label: string;
-  name: string;
-  stampUrl?: string | null;
-}) {
-  return (
-    <div className="relative border border-foreground p-3 print:border-black">
-      <div className="text-[10.5px] text-foreground-muted print:text-gray-700">{label}</div>
-      <div className="mt-1 text-sm font-medium">{name}</div>
-      {stampUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={stampUrl}
-          alt="날인"
-          className="absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
-        />
-      )}
-      <div className="mt-6 h-4" />
-    </div>
-  );
-}

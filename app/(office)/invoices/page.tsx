@@ -96,7 +96,6 @@ export default async function InvoicesPage({
          sites(name), waste_types(name)`,
       )
       .eq('company_id', searchParams.company)
-      .eq('direction', 'in')
       .neq('status', 'archived')
       .gte('log_date', from)
       .lte('log_date', to)
@@ -185,10 +184,10 @@ export default async function InvoicesPage({
                     <span className="font-mono">{preview.period.from}</span>
                     {' ~ '}
                     <span className="font-mono">{preview.period.to}</span>
-                    {' '}기간에 반입(매출) 거래가 없습니다.
+                    {' '}기간에 거래가 없습니다.
                   </p>
                   <p className="mt-1.5 text-[11px] text-foreground-muted">
-                    반출(매입) 건은 거래명세표 발급 대상이 아닙니다. 다른 기간·현장을 선택하거나 새 일보를 입력해주세요.
+                    다른 기간·현장을 선택하거나 새 일보를 입력해주세요.
                   </p>
                 </div>
                 <div className="mt-4">

@@ -72,7 +72,7 @@ export default async function InvoicesPage({
         .from('waste_logs')
         .select(
           `id, log_date, direction, vehicle_no, weight_kg, unit_price, transport_fee,
-           supply_amount, vat, total_amount, is_paid,
+           billing_type, supply_amount, vat, total_amount, is_invoiced, is_paid, note,
            sites(name), waste_types(name)`,
         )
         .eq('company_id', searchParams.company)
@@ -123,10 +123,26 @@ export default async function InvoicesPage({
 
         {preview ? (
           <div className="space-y-4">
-            {/* 화면 편집 (인쇄에서 hidden) */}
-            <EditableInvoiceTable logs={preview.logs as unknown as EditableLog[]} />
+            {/* 거래 0건 시 편집표 skip — 안전 (Application error 회피) */}
+            {preview.logs.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border bg-surface p-6 text-center print:hidden">
+                <p className="text-sm text-foreground-muted">
+                  <strong className="text-foreground">{preview.company.name}</strong>
+                  {' '}의{' '}
+                  <span className="font-mono">{preview.period.from}</span>
+                  {' ~ '}
+                  <span className="font-mono">{preview.period.to}</span>
+                  {' '}기간에 거래가 없습니다.
+                </p>
+                <p className="mt-1.5 text-[11px] text-foreground-muted">
+                  다른 월을 선택하거나 새 일보를 입력해주세요.
+                </p>
+              </div>
+            ) : (
+              <EditableInvoiceTable logs={preview.logs as unknown as EditableLog[]} />
+            )}
 
-            {/* 인쇄 양식 (화면에서도 보이지만 인쇄 시 이 부분만 출력) */}
+            {/* 인쇄 양식 (0건이어도 표시 — 양식엔 "거래 없음" 안내 포함) */}
             <InvoicePreview
               company={preview.company}
               selfCompany={preview.selfCompany}

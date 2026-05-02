@@ -32,6 +32,14 @@ interface Preset {
   range: () => { from: Date; to: Date };
 }
 
+// "전체 기간" 감지용 — sentinel range. 변경 시 isAllTime 도 같이 수정.
+const ALL_TIME_FROM = '1900-01-01';
+const ALL_TIME_TO = '2099-12-31';
+
+function isAllTime(from: string, to: string): boolean {
+  return from <= ALL_TIME_FROM && to >= ALL_TIME_TO;
+}
+
 function buildPresets(): Preset[] {
   const today = new Date();
   return [
@@ -53,6 +61,13 @@ function buildPresets(): Preset[] {
     {
       label: '최근 3개월',
       range: () => ({ from: startOfMonth(subMonths(today, 2)), to: today }),
+    },
+    {
+      label: '전체 기간',
+      range: () => ({
+        from: new Date(ALL_TIME_FROM),
+        to: new Date(ALL_TIME_TO),
+      }),
     },
   ];
 }
@@ -131,9 +146,11 @@ export function DateRangePicker({ from, to }: Props) {
       : [previewStart, previewEnd];
   })();
 
-  const triggerLabel = isSameDay(fromDate, toDate)
-    ? display(from)
-    : `${display(from)} ~ ${display(to)}`;
+  const triggerLabel = isAllTime(from, to)
+    ? '전체 기간'
+    : isSameDay(fromDate, toDate)
+      ? display(from)
+      : `${display(from)} ~ ${display(to)}`;
 
   return (
     <div ref={containerRef} className="relative">
@@ -143,7 +160,7 @@ export function DateRangePicker({ from, to }: Props) {
         className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-[12px] font-medium shadow-sm hover:bg-background-subtle"
       >
         <Calendar className="h-3.5 w-3.5" strokeWidth={1.75} />
-        <span className="font-mono">{triggerLabel}</span>
+        <span className={isAllTime(from, to) ? '' : 'font-mono'}>{triggerLabel}</span>
       </button>
 
       {open && (

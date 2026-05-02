@@ -10,8 +10,10 @@ import {
   Database,
   Calendar,
   Settings,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { signOutAction } from '@/actions/auth';
 
 interface ShellProps {
   user?: { email?: string | null };
@@ -105,17 +107,33 @@ export function Shell({ user, pendingCount = 0, children }: ShellProps) {
         </nav>
         <div className="flex-1" />
         <div className="border-t border-border p-2.5">
-          <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-background-subtle text-[11px] font-semibold text-foreground-secondary">
+          <div className="flex items-center gap-1.5 rounded-md px-2 py-1.5">
+            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-background-subtle text-[11px] font-semibold text-foreground-secondary">
               공
             </div>
-            <div className="flex flex-1 flex-col leading-tight">
+            <div className="flex flex-1 flex-col overflow-hidden leading-tight">
               <span className="text-[11.5px] font-medium">공용 계정</span>
               <span className="truncate text-[10px] text-foreground-muted">
-                {user?.email ?? 'office@acerc.local'}
+                {user?.email ?? '—'}
               </span>
             </div>
-            <Settings className="h-3.5 w-3.5 text-foreground-muted" strokeWidth={1.75} />
+            <Link
+              href="/settings"
+              className="rounded p-1 text-foreground-muted hover:bg-background-subtle hover:text-foreground"
+              title="설정"
+            >
+              <Settings className="h-3.5 w-3.5" strokeWidth={1.75} />
+            </Link>
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="rounded p-1 text-foreground-muted hover:bg-danger-bg hover:text-danger"
+                title="로그아웃"
+                aria-label="로그아웃"
+              >
+                <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
+              </button>
+            </form>
           </div>
         </div>
       </aside>

@@ -33,10 +33,18 @@ interface SpreadsheetRow {
   waste_type_name: string;
   treatment_plant_name: string;
   vehicle_no: string;
-  weight_kg: string;
+  weight_total_kg: string;
+  weight_tare_kg: string;
   unit_price: string;
   transport_fee: string;
   note: string;
+}
+
+// 총중량 - 공차중량 = 실중량 (음수 0으로 클램프)
+function calcNetWeight(total: string, tare: string): number {
+  const t = total ? Number(total) : 0;
+  const a = tare ? Number(tare) : 0;
+  return Math.max(0, t - a);
 }
 
 interface Props {
@@ -55,7 +63,8 @@ const blankRow = (date?: string): SpreadsheetRow => ({
   waste_type_name: '',
   treatment_plant_name: '',
   vehicle_no: '',
-  weight_kg: '',
+  weight_total_kg: '',
+  weight_tare_kg: '',
   unit_price: '',
   transport_fee: '0',
   note: '',
@@ -121,7 +130,11 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
   };
 
   const isRowEmpty = (r: SpreadsheetRow) =>
-    !r.company_name.trim() && !r.waste_type_name.trim() && !r.weight_kg && !r.note.trim();
+    !r.company_name.trim() &&
+    !r.waste_type_name.trim() &&
+    !r.weight_total_kg &&
+    !r.weight_tare_kg &&
+    !r.note.trim();
 
   const isRowValid = (r: SpreadsheetRow) =>
     r.log_date &&
@@ -137,7 +150,7 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
       (s, r) => {
         const c = calcBilling({
           billingType: 'weight_based',
-          weightKg: r.weight_kg ? Number(r.weight_kg) : 0,
+          weightKg: calcNetWeight(r.weight_total_kg, r.weight_tare_kg),
           unitPrice: r.unit_price ? Number(r.unit_price) : 0,
           transportFee: r.transport_fee ? Number(r.transport_fee) : 0,
         });
@@ -155,9 +168,10 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
     if (validRows.length === 0) return;
     setResult(null);
     const payload: ImportRow[] = validRows.map((r) => {
+      const netKg = calcNetWeight(r.weight_total_kg, r.weight_tare_kg);
       const c = calcBilling({
         billingType: 'weight_based',
-        weightKg: r.weight_kg ? Number(r.weight_kg) : 0,
+        weightKg: netKg,
         unitPrice: r.unit_price ? Number(r.unit_price) : 0,
         transportFee: r.transport_fee ? Number(r.transport_fee) : 0,
       });
@@ -169,7 +183,9 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
         waste_type_name: r.waste_type_name.trim(),
         treatment_plant_name: r.treatment_plant_name.trim() || null,
         vehicle_no: r.vehicle_no.trim() || null,
-        weight_kg: r.weight_kg ? Number(r.weight_kg) : null,
+        weight_kg: r.weight_total_kg || r.weight_tare_kg ? netKg : null,
+        weight_total_kg: r.weight_total_kg ? Number(r.weight_total_kg) : null,
+        weight_tare_kg: r.weight_tare_kg ? Number(r.weight_tare_kg) : null,
         unit_price: r.unit_price ? Number(r.unit_price) : null,
         transport_fee: r.transport_fee ? Number(r.transport_fee) : 0,
         billing_type: 'weight_based',
@@ -233,7 +249,9 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
               <Th className="w-28">성상<span className="text-danger">*</span></Th>
               <Th className="w-28">처리장</Th>
               <Th className="w-28">차량</Th>
-              <Th className="w-20 text-right">중량(kg)</Th>
+              <Th className="w-20 text-right">총중량(kg)</Th>
+              <Th className="w-20 text-right">공차중량(kg)</Th>
+              <Th className="w-20 text-right">실중량 (자동)</Th>
               <Th className="w-20 text-right">단가</Th>
               <Th className="w-20 text-right">운반비</Th>
               <Th className="w-32 text-right">청구금액 (자동)</Th>
@@ -243,9 +261,10 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
           </thead>
           <tbody>
             {rows.map((r, i) => {
+              const netKg = calcNetWeight(r.weight_total_kg, r.weight_tare_kg);
               const calc = calcBilling({
                 billingType: 'weight_based',
-                weightKg: r.weight_kg ? Number(r.weight_kg) : 0,
+                weightKg: netKg,
                 unitPrice: r.unit_price ? Number(r.unit_price) : 0,
                 transportFee: r.transport_fee ? Number(r.transport_fee) : 0,
               });
@@ -320,9 +339,25 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
                       type="number"
                       align="right"
                       mono
-                      value={r.weight_kg}
-                      onChange={(v) => updateRow(i, 'weight_kg', v)}
+                      value={r.weight_total_kg}
+                      onChange={(v) => updateRow(i, 'weight_total_kg', v)}
                     />
+                  </Td>
+                  <Td>
+                    <CellInput
+                      type="number"
+                      align="right"
+                      mono
+                      value={r.weight_tare_kg}
+                      onChange={(v) => updateRow(i, 'weight_tare_kg', v)}
+                    />
+                  </Td>
+                  <Td className="text-right font-mono">
+                    {r.weight_total_kg || r.weight_tare_kg ? (
+                      <span className="text-foreground-muted">{netKg}</span>
+                    ) : (
+                      <span className="text-foreground-dim">—</span>
+                    )}
                   </Td>
                   <Td>
                     <CellInput

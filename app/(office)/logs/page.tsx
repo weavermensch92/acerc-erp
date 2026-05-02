@@ -18,6 +18,7 @@ interface SearchParams {
   to?: string;
   company?: string;
   direction?: string;
+  plant?: string;
 }
 
 const statusFiltersAll: Array<{ id: string; label: string; value?: LogStatus }> = [
@@ -75,6 +76,7 @@ export default async function LogsPage({
   if (searchParams.direction === 'in' || searchParams.direction === 'out') {
     query = query.eq('direction', searchParams.direction);
   }
+  if (searchParams.plant) query = query.eq('treatment_plant_id', searchParams.plant);
 
   const { data: logs } = await query;
   const rows = (logs ?? []) as unknown as LogRow[];
@@ -97,6 +99,7 @@ export default async function LogsPage({
     if (searchParams.to) params.set('to', searchParams.to);
     if (searchParams.company) params.set('company', searchParams.company);
     if (searchParams.direction) params.set('direction', searchParams.direction);
+    if (searchParams.plant) params.set('plant', searchParams.plant);
     const q = params.toString();
     return q ? `/logs?${q}` : '/logs';
   };
@@ -108,6 +111,7 @@ export default async function LogsPage({
     if (searchParams.from) params.set('from', searchParams.from);
     if (searchParams.to) params.set('to', searchParams.to);
     if (searchParams.company) params.set('company', searchParams.company);
+    if (searchParams.plant) params.set('plant', searchParams.plant);
     const q = params.toString();
     return q ? `/logs?${q}` : '/logs';
   };
@@ -117,7 +121,18 @@ export default async function LogsPage({
     !!searchParams.from ||
     !!searchParams.to ||
     !!searchParams.company ||
-    !!searchParams.direction;
+    !!searchParams.direction ||
+    !!searchParams.plant;
+
+  const selectedPlantName = searchParams.plant
+    ? (
+        await supabase
+          .from('treatment_plants')
+          .select('name')
+          .eq('id', searchParams.plant)
+          .maybeSingle()
+      ).data?.name ?? null
+    : null;
 
   const selectedCompanyName = searchParams.company
     ? companies.find((c) => c.id === searchParams.company)?.name
@@ -242,6 +257,9 @@ export default async function LogsPage({
           {searchParams.direction && (
             <input type="hidden" name="direction" value={searchParams.direction} />
           )}
+          {searchParams.plant && (
+            <input type="hidden" name="plant" value={searchParams.plant} />
+          )}
           <div className="space-y-1">
             <label className="text-[10.5px] text-foreground-muted">거래처</label>
             <Select name="company" defaultValue={searchParams.company ?? ''} className="min-w-[180px]">
@@ -271,10 +289,19 @@ export default async function LogsPage({
               </Button>
             </Link>
           )}
-          {selectedCompanyName && (
-            <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-info-bg px-2.5 py-1 text-[11px] text-info">
-              {selectedCompanyName}
-            </span>
+          {(selectedCompanyName || selectedPlantName) && (
+            <div className="ml-auto flex items-center gap-1.5">
+              {selectedCompanyName && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-info-bg px-2.5 py-1 text-[11px] text-info">
+                  거래처: {selectedCompanyName}
+                </span>
+              )}
+              {selectedPlantName && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-info-bg px-2.5 py-1 text-[11px] text-info">
+                  처리장: {selectedPlantName}
+                </span>
+              )}
+            </div>
           )}
         </form>
 

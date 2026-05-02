@@ -70,7 +70,10 @@ export default async function EditLogPage({ params }: { params: { id: string } }
             company_name: detail.companies?.name ?? '',
             site_name: detail.sites?.name ?? '',
             waste_type_name: detail.waste_types?.name ?? '',
-            treatment_plant_name: detail.treatment_plants?.name ?? '',
+            treatment_plant_name:
+              detail.treatment_plants?.name ??
+              detail.treatment_plant_name_snapshot ??
+              '',
             vehicle_no: detail.vehicle_no ?? '',
             weight_total_kg: detail.weight_total_kg ?? '',
             weight_tare_kg: detail.weight_tare_kg ?? '',

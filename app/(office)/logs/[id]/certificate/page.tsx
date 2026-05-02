@@ -23,6 +23,7 @@ interface LogDetail {
   } | null;
   waste_types: { name: string } | null;
   treatment_plants: { name: string; address: string | null } | null;
+  treatment_plant_name_snapshot: string | null;
 }
 
 export default async function CertificatePage({
@@ -42,7 +43,8 @@ export default async function CertificatePage({
       `log_date, vehicle_no, weight_kg,
        companies(name, business_no, address, contact_name, contact_phone),
        waste_types(name),
-       treatment_plants(name, address)`,
+       treatment_plants(name, address),
+       treatment_plant_name_snapshot`,
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -101,7 +103,12 @@ export default async function CertificatePage({
           }}
           company={detail.companies}
           selfCompany={selfCompany}
-          plant={detail.treatment_plants}
+          plant={
+            detail.treatment_plants ??
+            (detail.treatment_plant_name_snapshot
+              ? { name: detail.treatment_plant_name_snapshot, address: null }
+              : null)
+          }
           wasteType={detail.waste_types}
           selfAsProcessor={selfAsProcessor}
         />

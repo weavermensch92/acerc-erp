@@ -67,7 +67,8 @@ export default async function LogDetailPage({ params }: { params: { id: string }
        companies(id, name, business_no),
        sites(id, name),
        waste_types(id, name),
-       treatment_plants(id, name)`,
+       treatment_plants(id, name),
+       treatment_plant_name_snapshot`,
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -168,7 +169,12 @@ export default async function LogDetailPage({ params }: { params: { id: string }
 
             <Section title="폐기물">
               <Field label="성상">{detail.waste_types?.name ?? '—'}</Field>
-              <Field label="처리장">{detail.treatment_plants?.name ?? '—'}</Field>
+              <Field label="처리장">
+                {detail.treatment_plants?.name ??
+                  (detail.treatment_plant_name_snapshot
+                    ? `${detail.treatment_plant_name_snapshot} (삭제됨)`
+                    : '—')}
+              </Field>
               <Field label="차량번호">
                 <span className="font-mono">{detail.vehicle_no ?? '—'}</span>
               </Field>

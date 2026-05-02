@@ -58,6 +58,7 @@ export interface WasteLog {
   site_id: string | null;
   waste_type_id: string;
   treatment_plant_id: string | null;
+  treatment_plant_name_snapshot: string | null;
   vehicle_no: string | null;
   weight_kg: number | null;
   weight_total_kg: number | null;

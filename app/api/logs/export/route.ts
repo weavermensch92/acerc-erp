@@ -27,6 +27,7 @@ interface LogRow {
   sites: { name: string } | null;
   waste_types: { name: string } | null;
   treatment_plants: { name: string } | null;
+  treatment_plant_name_snapshot: string | null;
 }
 
 const directionLabel: Record<string, string> = { in: '반입', out: '반출' };
@@ -62,7 +63,8 @@ export async function GET(req: Request) {
        companies(name, business_no),
        sites(name),
        waste_types(name),
-       treatment_plants(name)`,
+       treatment_plants(name),
+       treatment_plant_name_snapshot`,
     )
     .order('log_date', { ascending: true })
     .order('created_at', { ascending: true });
@@ -111,7 +113,7 @@ export async function GET(req: Request) {
     r.companies?.business_no ?? '',
     r.sites?.name ?? '',
     r.waste_types?.name ?? '',
-    r.treatment_plants?.name ?? '',
+    r.treatment_plants?.name ?? r.treatment_plant_name_snapshot ?? '',
     r.vehicle_no ?? '',
     r.weight_total_kg ?? '',
     r.weight_tare_kg ?? '',

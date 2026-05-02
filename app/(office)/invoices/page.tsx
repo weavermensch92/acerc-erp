@@ -18,21 +18,33 @@ export const dynamic = 'force-dynamic';
 interface SearchParams {
   company?: string;
   site?: string;
+  from?: string;
+  to?: string;
+  // 하위 호환 — 기존 `?period=YYYY-MM` 진입점도 계속 동작
   period?: string;
 }
 
-function parsePeriod(period: string | undefined) {
-  if (!period || !/^\d{4}-\d{2}$/.test(period)) {
-    const now = new Date();
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function resolvePeriod(sp: SearchParams) {
+  // 1) from/to 둘 다 유효하면 그대로
+  if (sp.from && sp.to && DATE_RE.test(sp.from) && DATE_RE.test(sp.to)) {
+    const [from, to] = sp.from <= sp.to ? [sp.from, sp.to] : [sp.to, sp.from];
+    return { from, to };
+  }
+  // 2) period=YYYY-MM 호환
+  if (sp.period && /^\d{4}-\d{2}$/.test(sp.period)) {
+    const [y, m] = sp.period.split('-').map(Number);
     return {
-      from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10),
-      to: new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10),
+      from: new Date(y, m - 1, 1).toISOString().slice(0, 10),
+      to: new Date(y, m, 0).toISOString().slice(0, 10),
     };
   }
-  const [y, m] = period.split('-').map(Number);
+  // 3) 기본: 이번 달
+  const now = new Date();
   return {
-    from: new Date(y, m - 1, 1).toISOString().slice(0, 10),
-    to: new Date(y, m, 0).toISOString().slice(0, 10),
+    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10),
+    to: new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10),
   };
 }
 
@@ -72,8 +84,9 @@ export default async function InvoicesPage({
     siteName: string | null;
   } | null = null;
 
+  const { from, to } = resolvePeriod(searchParams);
+
   if (searchParams.company) {
-    const { from, to } = parsePeriod(searchParams.period);
 
     let logsQuery = supabase
       .from('waste_logs')
@@ -143,7 +156,8 @@ export default async function InvoicesPage({
             sites={sites}
             defaultCompany={searchParams.company}
             defaultSite={searchParams.site}
-            defaultPeriod={searchParams.period}
+            defaultFrom={from}
+            defaultTo={to}
             hasPreview={!!preview}
           />
         </div>
@@ -174,7 +188,7 @@ export default async function InvoicesPage({
                     {' '}기간에 반입(매출) 거래가 없습니다.
                   </p>
                   <p className="mt-1.5 text-[11px] text-foreground-muted">
-                    반출(매입) 건은 거래명세표 발급 대상이 아닙니다. 다른 월·현장을 선택하거나 새 일보를 입력해주세요.
+                    반출(매입) 건은 거래명세표 발급 대상이 아닙니다. 다른 기간·현장을 선택하거나 새 일보를 입력해주세요.
                   </p>
                 </div>
                 <div className="mt-4">
@@ -198,7 +212,7 @@ export default async function InvoicesPage({
         ) : (
           <div className="rounded-lg border border-dashed border-border bg-surface p-10 text-center print:hidden">
             <p className="text-sm text-foreground-muted">
-              거래처와 월을 선택한 뒤 [조회] 를 눌러주세요. 현장은 선택하지 않으면 거래처의 모든 현장 거래가 포함됩니다.
+              거래처와 기간을 선택한 뒤 [조회] 를 눌러주세요. 현장은 선택하지 않으면 거래처의 모든 현장 거래가 포함됩니다.
             </p>
             <p className="mt-2 text-xs text-foreground-muted">
               조회된 명세표는 [인쇄 / PDF 저장] 버튼으로 그대로 인쇄하거나 PDF 로 저장할 수 있습니다.

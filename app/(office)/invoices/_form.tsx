@@ -6,7 +6,7 @@ import { Loader2, Search, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { formatMonth } from '@/lib/format';
+import { DateRangePicker } from '@/components/erp/DateRangePicker';
 
 interface CompanyOption {
   id: string;
@@ -24,19 +24,9 @@ interface Props {
   sites: SiteOption[];
   defaultCompany?: string;
   defaultSite?: string;
-  defaultPeriod?: string;
+  defaultFrom: string;
+  defaultTo: string;
   hasPreview: boolean;
-}
-
-function buildMonthOptions() {
-  const now = new Date();
-  const options: Array<{ value: string; label: string }> = [];
-  for (let i = -12; i <= 1; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    options.push({ value, label: formatMonth(d) });
-  }
-  return options.reverse();
 }
 
 export function InvoiceForm({
@@ -44,7 +34,8 @@ export function InvoiceForm({
   sites,
   defaultCompany = '',
   defaultSite = '',
-  defaultPeriod,
+  defaultFrom,
+  defaultTo,
   hasPreview,
 }: Props) {
   const router = useRouter();
@@ -52,9 +43,6 @@ export function InvoiceForm({
   const [isPending, startTransition] = useTransition();
   const [companyId, setCompanyId] = useState(defaultCompany);
   const [siteId, setSiteId] = useState(defaultSite);
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const [period, setPeriod] = useState(defaultPeriod ?? currentMonth);
 
   const siteOptions = useMemo(
     () => (companyId ? sites.filter((s) => s.company_id === companyId) : []),
@@ -63,7 +51,6 @@ export function InvoiceForm({
 
   const handleCompanyChange = (next: string) => {
     setCompanyId(next);
-    // 거래처가 바뀌면 기존 site 선택 무효화
     setSiteId('');
   };
 
@@ -72,12 +59,16 @@ export function InvoiceForm({
     if (!companyId) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set('company', companyId);
-    params.set('period', period);
     if (siteId) {
       params.set('site', siteId);
     } else {
       params.delete('site');
     }
+    // from/to 는 DateRangePicker 가 이미 URL 에 써둔 값을 유지
+    if (!params.get('from')) params.set('from', defaultFrom);
+    if (!params.get('to')) params.set('to', defaultTo);
+    // 기존 period 키는 정리
+    params.delete('period');
     startTransition(() => {
       router.push(`/invoices?${params.toString()}`);
     });
@@ -86,11 +77,8 @@ export function InvoiceForm({
   const handleReset = () => {
     setCompanyId('');
     setSiteId('');
-    setPeriod(currentMonth);
     router.push('/invoices');
   };
-
-  const monthOptions = buildMonthOptions();
 
   return (
     <div className="flex flex-wrap items-end gap-3 print:hidden">
@@ -129,19 +117,8 @@ export function InvoiceForm({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="inv-period">기간 (월)</Label>
-          <Select
-            id="inv-period"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="min-w-[160px]"
-          >
-            {monthOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
+          <Label>기간</Label>
+          <DateRangePicker from={defaultFrom} to={defaultTo} />
         </div>
         <Button type="submit" disabled={isPending || !companyId}>
           {isPending ? (

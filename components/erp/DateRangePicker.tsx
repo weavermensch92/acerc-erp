@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   addDays,
@@ -59,6 +59,7 @@ function buildPresets(): Preset[] {
 
 export function DateRangePicker({ from, to }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -103,7 +104,7 @@ export function DateRangePicker({ from, to }: Props) {
     setOpen(false);
     setPendingStart(null);
     setHover(null);
-    startTransition(() => router.push(`/dashboard?${params.toString()}`));
+    startTransition(() => router.push(`${pathname}?${params.toString()}`));
   };
 
   const handleDayClick = (day: Date) => {

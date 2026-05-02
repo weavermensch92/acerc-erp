@@ -33,9 +33,9 @@ interface PeriodRange {
 function parsePeriod(searchParams: { from?: string; to?: string }): PeriodRange {
   const today = new Date();
   const isoRe = /^\d{4}-\d{2}-\d{2}$/;
-  // 기본값: 당월 1일 ~ 말일
-  const defFrom = new Date(today.getFullYear(), today.getMonth(), 1);
-  const defTo = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  // 기본값: 오늘 기준 30일 전 ~ 오늘 (총 31일)
+  const defTo = today;
+  const defFrom = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
 
   const fromStr =
     searchParams.from && isoRe.test(searchParams.from) ? searchParams.from : fmt(defFrom);

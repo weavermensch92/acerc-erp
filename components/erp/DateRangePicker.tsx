@@ -146,15 +146,15 @@ export function DateRangePicker({ from, to }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-2 flex rounded-lg border border-border bg-surface shadow-lg">
+        <div className="absolute right-0 top-full z-30 mt-2 flex w-[680px] min-w-[680px] rounded-lg border border-border bg-surface shadow-lg">
           {/* 프리셋 패널 */}
-          <div className="flex flex-col gap-0.5 border-r border-border p-2">
+          <div className="flex w-28 flex-shrink-0 flex-col gap-0.5 border-r border-border p-2">
             {buildPresets().map((p) => (
               <button
                 key={p.label}
                 type="button"
                 onClick={() => handlePreset(p)}
-                className="rounded px-3 py-1.5 text-left text-[12px] font-medium text-foreground-secondary hover:bg-background-subtle"
+                className="whitespace-nowrap rounded px-3 py-1.5 text-left text-[12px] font-medium text-foreground-secondary hover:bg-background-subtle"
               >
                 {p.label}
               </button>
@@ -162,31 +162,31 @@ export function DateRangePicker({ from, to }: Props) {
           </div>
 
           {/* 캘린더 패널 */}
-          <div className="p-3">
+          <div className="min-w-0 flex-1 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={() => setLeftMonth((m) => subMonths(m, 1))}
-                className="rounded p-1 hover:bg-background-subtle"
+                className="flex-shrink-0 rounded p-1 hover:bg-background-subtle"
                 aria-label="이전 달"
               >
                 <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
               </button>
-              <div className="flex flex-1 items-center justify-around text-[12.5px] font-semibold">
+              <div className="flex flex-1 items-center justify-around whitespace-nowrap text-[12.5px] font-semibold">
                 <span>{format(leftMonth, 'yyyy년 M월', { locale: ko })}</span>
                 <span>{format(addMonths(leftMonth, 1), 'yyyy년 M월', { locale: ko })}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setLeftMonth((m) => addMonths(m, 1))}
-                className="rounded p-1 hover:bg-background-subtle"
+                className="flex-shrink-0 rounded p-1 hover:bg-background-subtle"
                 aria-label="다음 달"
               >
                 <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
               </button>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex justify-between gap-4">
               <MonthGrid
                 month={leftMonth}
                 rangeStart={rangeStart}
@@ -207,7 +207,7 @@ export function DateRangePicker({ from, to }: Props) {
 
             {/* 안내 + 닫기 */}
             <div className="mt-2 flex items-center justify-between border-t border-divider pt-2 text-[11px]">
-              <span className="text-foreground-muted">
+              <span className="whitespace-nowrap text-foreground-muted">
                 {pendingStart
                   ? `시작: ${format(pendingStart, 'yyyy.MM.dd')} — 종료일을 선택하세요`
                   : '시작일 → 종료일 순으로 클릭'}
@@ -219,7 +219,7 @@ export function DateRangePicker({ from, to }: Props) {
                   setPendingStart(null);
                   setHover(null);
                 }}
-                className="rounded px-2 py-0.5 text-foreground-muted hover:bg-background-subtle"
+                className="whitespace-nowrap rounded px-2 py-0.5 text-foreground-muted hover:bg-background-subtle"
               >
                 닫기
               </button>
@@ -263,10 +263,10 @@ function MonthGrid({
   }
 
   return (
-    <div className="space-y-1">
+    <div className="flex-shrink-0 space-y-1">
       <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] text-foreground-muted">
         {WEEK_HEADERS.map((w) => (
-          <div key={w} className="py-1">
+          <div key={w} className="w-8 py-1">
             {w}
           </div>
         ))}
@@ -288,7 +288,7 @@ function MonthGrid({
               onClick={() => onDayClick(d)}
               onMouseEnter={() => onDayHover(d)}
               className={cn(
-                'flex h-8 w-8 items-center justify-center text-[11.5px] font-medium transition-colors',
+                'flex h-8 w-8 flex-shrink-0 items-center justify-center text-[11.5px] font-medium transition-colors',
                 inMonth ? 'text-foreground' : 'text-foreground-dim',
                 isInRange && !isStart && !isEnd && 'bg-info-bg/60',
                 (isStart || isEnd || isPendingStart) &&

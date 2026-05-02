@@ -133,20 +133,77 @@ export async function updateTreatmentPlantAction(
   return { ok: true };
 }
 
-export async function deleteTreatmentPlantAction(id: string): Promise<MasterActionResult> {
+export async function deleteTreatmentPlantAction(
+  id: string,
+  options?: { detachLogs?: boolean },
+): Promise<MasterActionResult> {
   const supabase = createClient();
   const { count } = await supabase
     .from('waste_logs')
     .select('id', { count: 'exact', head: true })
     .eq('treatment_plant_id', id);
-  if ((count ?? 0) > 0) {
+  const usage = count ?? 0;
+
+  if (usage > 0 && !options?.detachLogs) {
     return {
       ok: false,
-      error: `이 처리장을 사용하는 일보가 ${count}건 있어 삭제할 수 없습니다`,
+      error: `이 처리장을 사용하는 일보가 ${usage}건 있습니다. 일보의 처리장 연결을 해제 후 삭제하려면 'detachLogs' 옵션을 사용하세요`,
     };
   }
+
+  // 사용 중인 일보의 treatment_plant_id 를 null 로 분리
+  if (usage > 0 && options?.detachLogs) {
+    const { error: detachErr } = await supabase
+      .from('waste_logs')
+      .update({ treatment_plant_id: null })
+      .eq('treatment_plant_id', id);
+    if (detachErr) {
+      return { ok: false, error: `일보 연결 해제 실패: ${detachErr.message}` };
+    }
+  }
+
   const { error } = await supabase.from('treatment_plants').delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
   revalidatePath('/masters/plants');
+  revalidatePath('/logs');
   return { ok: true };
+}
+
+// 처리장이 사용 중인 일보 목록 조회 (삭제 다이얼로그 미리보기용)
+export interface PlantUsageLog {
+  id: string;
+  log_date: string;
+  direction: 'in' | 'out';
+  vehicle_no: string | null;
+  weight_kg: number | null;
+  companies: { name: string } | null;
+  waste_types: { name: string } | null;
+}
+
+export async function getTreatmentPlantUsageAction(
+  id: string,
+  limit = 50,
+): Promise<{ ok: true; logs: PlantUsageLog[]; total: number } | { ok: false; error: string }> {
+  const supabase = createClient();
+  const [{ data, error }, { count }] = await Promise.all([
+    supabase
+      .from('waste_logs')
+      .select(
+        `id, log_date, direction, vehicle_no, weight_kg,
+         companies(name), waste_types(name)`,
+      )
+      .eq('treatment_plant_id', id)
+      .order('log_date', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('waste_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('treatment_plant_id', id),
+  ]);
+  if (error) return { ok: false, error: error.message };
+  return {
+    ok: true,
+    logs: (data ?? []) as unknown as PlantUsageLog[],
+    total: count ?? 0,
+  };
 }

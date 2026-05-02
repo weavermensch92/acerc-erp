@@ -1,12 +1,13 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, MapPin } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { PageHeader } from '@/components/erp/PageHeader';
 import { Pill } from '@/components/erp/Pill';
 import { Button } from '@/components/ui/button';
 import { CompanyForm } from '@/components/erp/CompanyForm';
 import { ShareTokenPanel } from '@/components/erp/ShareTokenPanel';
 import { DeleteCompanyButton } from '@/components/erp/DeleteCompanyButton';
+import { SiteAssignSection } from '@/components/erp/SiteAssignSection';
 import { createClient } from '@/lib/supabase/server';
 import { formatKRW, formatKg, formatDate } from '@/lib/format';
 import type { Company, Site, Direction } from '@/lib/types/database';
@@ -30,12 +31,17 @@ export default async function CompanyDetailPage({
 }) {
   const supabase = createClient();
 
-  const [companyRes, sitesRes, recentRes, totalRes] = await Promise.all([
+  const [companyRes, sitesRes, otherSitesRes, recentRes, totalRes] = await Promise.all([
     supabase.from('companies').select('*').eq('id', params.id).maybeSingle(),
     supabase
       .from('sites')
       .select('*')
       .eq('company_id', params.id)
+      .order('name'),
+    supabase
+      .from('sites')
+      .select('id, name, company_id, companies(name)')
+      .neq('company_id', params.id)
       .order('name'),
     supabase
       .from('waste_logs')
@@ -57,6 +63,17 @@ export default async function CompanyDetailPage({
   if (!companyRes.data) notFound();
   const company = companyRes.data as Company;
   const sites = (sitesRes.data ?? []) as Site[];
+  const otherSites = ((otherSitesRes.data ?? []) as unknown as Array<{
+    id: string;
+    name: string;
+    company_id: string;
+    companies: { name: string } | null;
+  }>).map((s) => ({
+    id: s.id,
+    name: s.name,
+    company_id: s.company_id,
+    company_name: s.companies?.name ?? null,
+  }));
   const recent = (recentRes.data ?? []) as unknown as RecentLog[];
   const totalRows = (totalRes.data ?? []) as Array<{
     total_amount: number | null;
@@ -118,44 +135,11 @@ export default async function CompanyDetailPage({
               }}
             />
 
-            <section className="rounded-[10px] border border-border bg-surface p-5 shadow-sm">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-[13px] font-semibold tracking-tight">
-                  공사현장 ({sites.length})
-                </h3>
-                <span className="text-[11px] text-foreground-muted">
-                  일보 입력 시 새 현장 입력하면 자동 추가
-                </span>
-              </div>
-              {sites.length === 0 ? (
-                <p className="text-xs text-foreground-muted">등록된 공사현장이 없습니다.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {sites.map((s) => (
-                    <li
-                      key={s.id}
-                      className="flex items-center gap-2 rounded-md border border-border bg-background-subtle px-3 py-2 text-sm"
-                    >
-                      <MapPin
-                        className="h-3.5 w-3.5 text-foreground-muted"
-                        strokeWidth={1.75}
-                      />
-                      <span className="font-medium">{s.name}</span>
-                      {s.address && (
-                        <span className="text-[11px] text-foreground-muted">
-                          {s.address}
-                        </span>
-                      )}
-                      {!s.is_active && (
-                        <Pill tone="neutral" className="ml-auto">
-                          비활성
-                        </Pill>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+            <SiteAssignSection
+              companyId={company.id}
+              sites={sites}
+              otherSites={otherSites}
+            />
 
             <section className="rounded-[10px] border border-border bg-surface p-5 shadow-sm">
               <h3 className="mb-3 text-[13px] font-semibold tracking-tight">

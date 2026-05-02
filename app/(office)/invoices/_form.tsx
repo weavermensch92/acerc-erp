@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { Loader2, Search, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -13,9 +13,17 @@ interface CompanyOption {
   name: string;
 }
 
+interface SiteOption {
+  id: string;
+  name: string;
+  company_id: string;
+}
+
 interface Props {
   companies: CompanyOption[];
+  sites: SiteOption[];
   defaultCompany?: string;
+  defaultSite?: string;
   defaultPeriod?: string;
   hasPreview: boolean;
 }
@@ -33,7 +41,9 @@ function buildMonthOptions() {
 
 export function InvoiceForm({
   companies,
+  sites,
   defaultCompany = '',
+  defaultSite = '',
   defaultPeriod,
   hasPreview,
 }: Props) {
@@ -41,9 +51,21 @@ export function InvoiceForm({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [companyId, setCompanyId] = useState(defaultCompany);
+  const [siteId, setSiteId] = useState(defaultSite);
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const [period, setPeriod] = useState(defaultPeriod ?? currentMonth);
+
+  const siteOptions = useMemo(
+    () => (companyId ? sites.filter((s) => s.company_id === companyId) : []),
+    [sites, companyId],
+  );
+
+  const handleCompanyChange = (next: string) => {
+    setCompanyId(next);
+    // 거래처가 바뀌면 기존 site 선택 무효화
+    setSiteId('');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +73,11 @@ export function InvoiceForm({
     const params = new URLSearchParams(searchParams.toString());
     params.set('company', companyId);
     params.set('period', period);
+    if (siteId) {
+      params.set('site', siteId);
+    } else {
+      params.delete('site');
+    }
     startTransition(() => {
       router.push(`/invoices?${params.toString()}`);
     });
@@ -58,6 +85,7 @@ export function InvoiceForm({
 
   const handleReset = () => {
     setCompanyId('');
+    setSiteId('');
     setPeriod(currentMonth);
     router.push('/invoices');
   };
@@ -72,13 +100,30 @@ export function InvoiceForm({
           <Select
             id="inv-company"
             value={companyId}
-            onChange={(e) => setCompanyId(e.target.value)}
+            onChange={(e) => handleCompanyChange(e.target.value)}
             className="min-w-[220px]"
           >
             <option value="">선택…</option>
             {companies.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="inv-site">현장 (선택)</Label>
+          <Select
+            id="inv-site"
+            value={siteId}
+            onChange={(e) => setSiteId(e.target.value)}
+            disabled={!companyId || siteOptions.length === 0}
+            className="min-w-[200px]"
+          >
+            <option value="">— 전체 —</option>
+            {siteOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
               </option>
             ))}
           </Select>

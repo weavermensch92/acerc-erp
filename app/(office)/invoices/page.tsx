@@ -2,15 +2,13 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/erp/PageHeader';
 import { Button } from '@/components/ui/button';
 import { InvoiceForm } from './_form';
+import { InvoiceEditorPreview } from '@/components/erp/InvoiceEditorPreview';
 import {
   InvoicePreview,
   type InvoiceLog,
   type InvoiceCompanyInfo,
 } from '@/components/erp/InvoicePreview';
-import {
-  EditableInvoiceTable,
-  type EditableLog,
-} from '@/components/erp/EditableInvoiceTable';
+import type { EditableLog } from '@/components/erp/EditableInvoiceTable';
 import { createClient } from '@/lib/supabase/server';
 import { getSelfCompanyInfo } from '@/lib/settings';
 import type { SelfCompanyInfo } from '@/lib/company-info';
@@ -19,6 +17,7 @@ export const dynamic = 'force-dynamic';
 
 interface SearchParams {
   company?: string;
+  site?: string;
   period?: string;
 }
 
@@ -45,50 +44,75 @@ export default async function InvoicesPage({
   const supabase = createClient();
   const selfCompany = await getSelfCompanyInfo(supabase);
 
-  const { data: companiesData } = await supabase
-    .from('companies')
-    .select('id, name')
-    .eq('is_internal', false)
-    .eq('is_deleted', false)
-    .order('name');
+  const [{ data: companiesData }, { data: sitesData }] = await Promise.all([
+    supabase
+      .from('companies')
+      .select('id, name')
+      .eq('is_internal', false)
+      .eq('is_deleted', false)
+      .order('name'),
+    supabase
+      .from('sites')
+      .select('id, name, company_id')
+      .eq('is_active', true)
+      .order('name'),
+  ]);
   const companies = (companiesData ?? []) as Array<{ id: string; name: string }>;
+  const sites = (sitesData ?? []) as Array<{
+    id: string;
+    name: string;
+    company_id: string;
+  }>;
 
   let preview: {
     company: InvoiceCompanyInfo;
     selfCompany: SelfCompanyInfo;
     period: { from: string; to: string };
     logs: InvoiceLog[];
+    siteName: string | null;
   } | null = null;
 
   if (searchParams.company) {
     const { from, to } = parsePeriod(searchParams.period);
+
+    let logsQuery = supabase
+      .from('waste_logs')
+      .select(
+        `id, log_date, direction, vehicle_no, weight_kg, unit_price, transport_fee,
+         billing_type, supply_amount, vat, total_amount, is_invoiced, is_paid, note,
+         sites(name), waste_types(name)`,
+      )
+      .eq('company_id', searchParams.company)
+      .eq('direction', 'in')
+      .neq('status', 'archived')
+      .gte('log_date', from)
+      .lte('log_date', to)
+      .order('log_date', { ascending: true });
+
+    if (searchParams.site) {
+      logsQuery = logsQuery.eq('site_id', searchParams.site);
+    }
+
     const [companyRes, logsRes] = await Promise.all([
       supabase
         .from('companies')
         .select('id, name, business_no, address, contact_name, contact_phone')
         .eq('id', searchParams.company)
         .maybeSingle(),
-      supabase
-        .from('waste_logs')
-        .select(
-          `id, log_date, direction, vehicle_no, weight_kg, unit_price, transport_fee,
-           billing_type, supply_amount, vat, total_amount, is_invoiced, is_paid, note,
-           sites(name), waste_types(name)`,
-        )
-        .eq('company_id', searchParams.company)
-        .eq('direction', 'in')
-        .neq('status', 'archived')
-        .gte('log_date', from)
-        .lte('log_date', to)
-        .order('log_date', { ascending: true }),
+      logsQuery,
     ]);
 
     if (companyRes.data) {
+      const siteName =
+        searchParams.site
+          ? sites.find((s) => s.id === searchParams.site)?.name ?? null
+          : null;
       preview = {
         company: companyRes.data as InvoiceCompanyInfo,
         selfCompany,
         period: { from, to },
         logs: (logsRes.data ?? []) as unknown as InvoiceLog[],
+        siteName,
       };
     }
   }
@@ -97,7 +121,7 @@ export default async function InvoicesPage({
     <>
       <PageHeader
         title="거래명세표"
-        subtitle="거래처별 / 기간별 명세표 조회 + 인쇄 (단건은 여기, 일괄은 [+ 일괄 발급])"
+        subtitle="거래처·현장·기간별 명세표 조회 + 인쇄 (단건은 여기, 일괄은 [+ 일괄 발급])"
         breadcrumb={[{ label: '에이스알앤씨' }, { label: '거래명세표' }]}
         actions={
           <>
@@ -116,45 +140,65 @@ export default async function InvoicesPage({
         <div className="mb-5">
           <InvoiceForm
             companies={companies}
+            sites={sites}
             defaultCompany={searchParams.company}
+            defaultSite={searchParams.site}
             defaultPeriod={searchParams.period}
             hasPreview={!!preview}
           />
         </div>
 
         {preview ? (
-          <div className="space-y-4">
-            {/* 거래 0건 시 편집표 skip — 안전 (Application error 회피) */}
-            {preview.logs.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border bg-surface p-6 text-center print:hidden">
-                <p className="text-sm text-foreground-muted">
-                  <strong className="text-foreground">{preview.company.name}</strong>
-                  {' '}의{' '}
-                  <span className="font-mono">{preview.period.from}</span>
-                  {' ~ '}
-                  <span className="font-mono">{preview.period.to}</span>
-                  {' '}기간에 반입(매출) 거래가 없습니다.
-                </p>
-                <p className="mt-1.5 text-[11px] text-foreground-muted">
-                  반출(매입) 건은 거래명세표 발급 대상이 아닙니다. 다른 월을 선택하거나 새 일보를 입력해주세요.
-                </p>
-              </div>
-            ) : (
-              <EditableInvoiceTable logs={preview.logs as unknown as EditableLog[]} />
+          <>
+            {preview.siteName && (
+              <p className="mb-3 text-[11.5px] text-foreground-muted print:hidden">
+                현장 필터:{' '}
+                <span className="font-medium text-foreground">{preview.siteName}</span>
+              </p>
             )}
-
-            {/* 인쇄 양식 (0건이어도 표시 — 양식엔 "거래 없음" 안내 포함) */}
-            <InvoicePreview
-              company={preview.company}
-              selfCompany={preview.selfCompany}
-              period={preview.period}
-              logs={preview.logs}
-            />
-          </div>
+            {preview.logs.length === 0 ? (
+              <>
+                <div className="rounded-lg border border-dashed border-border bg-surface p-6 text-center print:hidden">
+                  <p className="text-sm text-foreground-muted">
+                    <strong className="text-foreground">{preview.company.name}</strong>
+                    {preview.siteName && (
+                      <>
+                        {' / '}
+                        <strong className="text-foreground">{preview.siteName}</strong>
+                      </>
+                    )}
+                    {' '}의{' '}
+                    <span className="font-mono">{preview.period.from}</span>
+                    {' ~ '}
+                    <span className="font-mono">{preview.period.to}</span>
+                    {' '}기간에 반입(매출) 거래가 없습니다.
+                  </p>
+                  <p className="mt-1.5 text-[11px] text-foreground-muted">
+                    반출(매입) 건은 거래명세표 발급 대상이 아닙니다. 다른 월·현장을 선택하거나 새 일보를 입력해주세요.
+                  </p>
+                </div>
+                <div className="mt-4">
+                  <InvoicePreview
+                    company={preview.company}
+                    selfCompany={preview.selfCompany}
+                    period={preview.period}
+                    logs={preview.logs}
+                  />
+                </div>
+              </>
+            ) : (
+              <InvoiceEditorPreview
+                company={preview.company}
+                selfCompany={preview.selfCompany}
+                period={preview.period}
+                logs={preview.logs as unknown as EditableLog[]}
+              />
+            )}
+          </>
         ) : (
           <div className="rounded-lg border border-dashed border-border bg-surface p-10 text-center print:hidden">
             <p className="text-sm text-foreground-muted">
-              거래처와 월을 선택한 뒤 [조회] 를 눌러주세요.
+              거래처와 월을 선택한 뒤 [조회] 를 눌러주세요. 현장은 선택하지 않으면 거래처의 모든 현장 거래가 포함됩니다.
             </p>
             <p className="mt-2 text-xs text-foreground-muted">
               조회된 명세표는 [인쇄 / PDF 저장] 버튼으로 그대로 인쇄하거나 PDF 로 저장할 수 있습니다.

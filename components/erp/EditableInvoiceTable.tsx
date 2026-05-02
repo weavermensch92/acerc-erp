@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { Save, RotateCcw, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import {
+  Save,
+  RotateCcw,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+  ChevronUp,
+  ChevronDown,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { calcBilling } from '@/lib/calc/billing';
@@ -77,12 +85,86 @@ function statesEqual(a: RowState | undefined, b: RowState | undefined): boolean 
   );
 }
 
+const directionRank: Record<string, number> = { in: 0, out: 1 };
+
+function compareLogs(
+  a: EditableLog,
+  b: EditableLog,
+  key: SortKey,
+  dir: 'asc' | 'desc',
+): number {
+  const sign = dir === 'asc' ? 1 : -1;
+  const get = (l: EditableLog): string | number => {
+    switch (key) {
+      case 'log_date':
+        return l.log_date;
+      case 'direction':
+        return directionRank[l.direction] ?? 99;
+      case 'site':
+        return l.sites?.name ?? '';
+      case 'waste_type':
+        return l.waste_types?.name ?? '';
+      case 'vehicle_no':
+        return l.vehicle_no ?? '';
+      case 'billing_type':
+        return l.billing_type;
+      case 'weight_kg':
+        return l.weight_kg ?? 0;
+      case 'unit_price':
+        return l.unit_price ?? 0;
+      case 'transport_fee':
+        return l.transport_fee ?? 0;
+      case 'total_amount':
+        return l.total_amount ?? 0;
+      case 'is_invoiced':
+        return l.is_invoiced ? 1 : 0;
+      case 'is_paid':
+        return l.is_paid ? 1 : 0;
+    }
+  };
+  const av = get(a);
+  const bv = get(b);
+  if (typeof av === 'number' && typeof bv === 'number') {
+    return sign * (av - bv);
+  }
+  return sign * String(av).localeCompare(String(bv), 'ko');
+}
+
+export type SortKey =
+  | 'log_date'
+  | 'direction'
+  | 'site'
+  | 'waste_type'
+  | 'vehicle_no'
+  | 'billing_type'
+  | 'weight_kg'
+  | 'unit_price'
+  | 'transport_fee'
+  | 'total_amount'
+  | 'is_invoiced'
+  | 'is_paid';
+
+export interface SelectionConfig {
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onToggleAll: (checked: boolean) => void;
+}
+
+export interface SortConfig {
+  sortKey: SortKey;
+  sortDir: 'asc' | 'desc';
+  onSort: (key: SortKey, dir: 'asc' | 'desc') => void;
+}
+
 interface Props {
   logs: EditableLog[];
   // 컨텍스트별 라벨 — 반입(거래명세표) 기본값, 반출(지급) 시 prop 으로 덮어씀
   invoicedLabel?: string; // 청구 / 청구서수령
   paidLabel?: string;     // 결제 / 지급
   amountLabel?: string;   // 청구금액 / 지급금액
+  // 거래명세표용 — 행 포함 체크박스 + 정렬 화살표
+  selection?: SelectionConfig;
+  sort?: SortConfig;
 }
 
 export function EditableInvoiceTable({
@@ -90,6 +172,8 @@ export function EditableInvoiceTable({
   invoicedLabel = '청구',
   paidLabel = '결제',
   amountLabel = '청구금액',
+  selection,
+  sort,
 }: Props) {
   const initial = useMemo(
     () =>
@@ -162,6 +246,12 @@ export function EditableInvoiceTable({
     });
   };
 
+  // 정렬: sort prop 이 있으면 정렬된 사본을 만들어 렌더 (state/initial 은 logs 원본 기준 → 편집 보존)
+  const displayLogs = useMemo(() => {
+    if (!sort) return logs;
+    return [...logs].sort((a, b) => compareLogs(a, b, sort.sortKey, sort.sortDir));
+  }, [logs, sort?.sortKey, sort?.sortDir]);
+
   const totalCalc = useMemo(() => {
     return logs.reduce(
       (s, l) => {
@@ -196,24 +286,37 @@ export function EditableInvoiceTable({
         <table className="w-full text-xs">
           <thead className="bg-background-subtle">
             <tr className="border-b border-border">
-              <Th className="w-20">일자</Th>
-              <Th className="w-12">구분</Th>
-              <Th className="w-24">현장</Th>
-              <Th className="w-24">성상</Th>
-              <Th className="w-20">차량</Th>
-              <Th className="w-20">청구타입</Th>
-              <Th className="w-20 text-right">중량(kg)</Th>
-              <Th className="w-20 text-right">단가</Th>
-              <Th className="w-20 text-right">운반비</Th>
-              <Th className="w-28 text-right">{amountLabel}</Th>
-              <Th className="w-12 text-center">{invoicedLabel}</Th>
-              <Th className="w-12 text-center">{paidLabel}</Th>
+              {selection && (
+                <Th className="w-8 text-center">
+                  <input
+                    type="checkbox"
+                    aria-label="전체 선택"
+                    className="h-3.5 w-3.5 rounded border-border"
+                    checked={
+                      logs.length > 0 && logs.every((l) => selection.selectedIds.has(l.id))
+                    }
+                    onChange={(e) => selection.onToggleAll(e.target.checked)}
+                  />
+                </Th>
+              )}
+              <Th className="w-20" sortKey="log_date" sort={sort}>일자</Th>
+              <Th className="w-12" sortKey="direction" sort={sort}>구분</Th>
+              <Th className="w-24" sortKey="site" sort={sort}>현장</Th>
+              <Th className="w-24" sortKey="waste_type" sort={sort}>성상</Th>
+              <Th className="w-20" sortKey="vehicle_no" sort={sort}>차량</Th>
+              <Th className="w-20" sortKey="billing_type" sort={sort}>청구타입</Th>
+              <Th className="w-20 text-right" sortKey="weight_kg" sort={sort}>중량(kg)</Th>
+              <Th className="w-20 text-right" sortKey="unit_price" sort={sort}>단가</Th>
+              <Th className="w-20 text-right" sortKey="transport_fee" sort={sort}>운반비</Th>
+              <Th className="w-28 text-right" sortKey="total_amount" sort={sort}>{amountLabel}</Th>
+              <Th className="w-12 text-center" sortKey="is_invoiced" sort={sort}>{invoicedLabel}</Th>
+              <Th className="w-12 text-center" sortKey="is_paid" sort={sort}>{paidLabel}</Th>
               <Th className="w-32">비고</Th>
               <Th className="w-10"></Th>
             </tr>
           </thead>
           <tbody>
-            {logs.map((l) => {
+            {displayLogs.map((l) => {
               // state 가 아직 초기화 안 된 경우 (logs prop 바뀐 직후 첫 렌더) initial fallback
               const s = state[l.id] ?? initial[l.id];
               if (!s) return null;
@@ -232,6 +335,17 @@ export function EditableInvoiceTable({
                     isDirty && 'bg-warning-bg/30',
                   )}
                 >
+                  {selection && (
+                    <Td className="text-center">
+                      <input
+                        type="checkbox"
+                        aria-label="명세표 포함"
+                        className="h-3.5 w-3.5 rounded border-border"
+                        checked={selection.selectedIds.has(l.id)}
+                        onChange={() => selection.onToggle(l.id)}
+                      />
+                    </Td>
+                  )}
                   <Td className="font-mono text-foreground-muted">
                     {formatDate(l.log_date)}
                   </Td>
@@ -326,7 +440,10 @@ export function EditableInvoiceTable({
             })}
             {logs.length > 0 && (
               <tr className="bg-background-subtle text-xs font-semibold">
-                <td colSpan={9} className="px-2 py-2 text-right">
+                <td
+                  colSpan={selection ? 10 : 9}
+                  className="px-2 py-2 text-right"
+                >
                   변경 후 합계
                 </td>
                 <td className="px-2 py-2 text-right font-mono">
@@ -398,10 +515,20 @@ export function EditableInvoiceTable({
 function Th({
   children,
   className,
+  sortKey,
+  sort,
 }: {
   children?: React.ReactNode;
   className?: string;
+  sortKey?: SortKey;
+  sort?: SortConfig;
 }) {
+  const isRight = className?.includes('text-right');
+  const isCenter = className?.includes('text-center');
+  const sortable = sortKey && sort;
+  const isActive = sortable && sort.sortKey === sortKey;
+  const activeDir = isActive ? sort.sortDir : null;
+
   return (
     <th
       className={cn(
@@ -409,7 +536,41 @@ function Th({
         className,
       )}
     >
-      {children}
+      <div
+        className={cn(
+          'flex items-center gap-1',
+          isRight && 'justify-end',
+          isCenter && 'justify-center',
+        )}
+      >
+        <span>{children}</span>
+        {sortable && (
+          <span className="ml-0.5 inline-flex flex-col leading-[0.55]">
+            <button
+              type="button"
+              aria-label="오름차순"
+              onClick={() => sort.onSort(sortKey, 'asc')}
+              className={cn(
+                'opacity-30 hover:opacity-100',
+                activeDir === 'asc' && 'opacity-100 text-foreground',
+              )}
+            >
+              <ChevronUp className="h-2.5 w-2.5" strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              aria-label="내림차순"
+              onClick={() => sort.onSort(sortKey, 'desc')}
+              className={cn(
+                'opacity-30 hover:opacity-100',
+                activeDir === 'desc' && 'opacity-100 text-foreground',
+              )}
+            >
+              <ChevronDown className="h-2.5 w-2.5" strokeWidth={2.5} />
+            </button>
+          </span>
+        )}
+      </div>
     </th>
   );
 }

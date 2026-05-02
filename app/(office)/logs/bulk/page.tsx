@@ -8,7 +8,11 @@ export default async function BulkLogPage() {
   const supabase = createClient();
 
   const [companiesRes, wasteTypesRes, treatmentPlantsRes] = await Promise.all([
-    supabase.from('companies').select('id, name, default_unit_price').order('name'),
+    supabase
+      .from('companies')
+      .select('id, name, default_unit_price')
+      .eq('is_deleted', false)
+      .order('name'),
     supabase.from('waste_types').select('id, name, default_unit_price').order('name'),
     supabase.from('treatment_plants').select('id, name').order('name'),
   ]);

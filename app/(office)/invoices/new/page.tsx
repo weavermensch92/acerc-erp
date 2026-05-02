@@ -43,10 +43,11 @@ export default async function NewBatchPage({
   const supabase = createClient();
   const { from, to, monthKey } = parsePeriod(searchParams.period);
 
-  // 거래처 + 해당 기간 active 거래 집계
+  // 거래처 + 해당 기간 active 거래 집계 (활성 거래처만)
   const { data: companiesData } = await supabase
     .from('companies')
     .select('id, name, share_token, is_internal')
+    .eq('is_deleted', false)
     .order('name');
   const companies = (companiesData ?? []) as Array<{
     id: string;

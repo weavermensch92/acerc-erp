@@ -16,6 +16,8 @@ export interface Company {
   share_token: string | null;
   default_unit_price: number | null;
   is_internal: boolean;
+  is_deleted: boolean;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }

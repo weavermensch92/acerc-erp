@@ -117,6 +117,40 @@ export async function updateCompanyAction(
 }
 
 // ========================================
+// 거래처 삭제 (soft delete) — 기존 일보 보존, 신규 입력·자동완성에서 제외
+// share_token 도 자동 nullify (외부 접근 차단)
+// ========================================
+export async function deleteCompanyAction(id: string): Promise<CompanyActionResult> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('companies')
+    .update({
+      is_deleted: true,
+      deleted_at: new Date().toISOString(),
+      share_token: null,
+    })
+    .eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/companies');
+  revalidatePath(`/companies/${id}`);
+  revalidatePath('/invoices');
+  revalidatePath('/logs');
+  return { ok: true, companyId: id };
+}
+
+export async function restoreCompanyAction(id: string): Promise<CompanyActionResult> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('companies')
+    .update({ is_deleted: false, deleted_at: null })
+    .eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/companies');
+  revalidatePath(`/companies/${id}`);
+  return { ok: true, companyId: id };
+}
+
+// ========================================
 // share_token 발급 / 재발급 / 회수
 // ========================================
 export interface ShareTokenResult {

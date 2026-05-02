@@ -6,6 +6,7 @@ import { Pill } from '@/components/erp/Pill';
 import { Button } from '@/components/ui/button';
 import { CompanyForm } from '@/components/erp/CompanyForm';
 import { ShareTokenPanel } from '@/components/erp/ShareTokenPanel';
+import { DeleteCompanyButton } from '@/components/erp/DeleteCompanyButton';
 import { createClient } from '@/lib/supabase/server';
 import { formatKRW, formatKg, formatDate } from '@/lib/format';
 import type { Company, Site, Direction } from '@/lib/types/database';
@@ -210,10 +211,20 @@ export default async function CompanyDetailPage({
                 </dl>
               </div>
 
-              <ShareTokenPanel
+              {!company.is_deleted && (
+                <ShareTokenPanel
+                  companyId={company.id}
+                  initialToken={company.share_token}
+                  appUrl={appUrl}
+                />
+              )}
+
+              <DeleteCompanyButton
                 companyId={company.id}
-                initialToken={company.share_token}
-                appUrl={appUrl}
+                companyName={company.name}
+                isDeleted={company.is_deleted}
+                hasShareToken={!!company.share_token}
+                logCount={totals.count}
               />
             </div>
           </aside>

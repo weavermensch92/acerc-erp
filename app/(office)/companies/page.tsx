@@ -20,6 +20,7 @@ export const dynamic = 'force-dynamic';
 
 interface SearchParams {
   q?: string;
+  deleted?: string;
 }
 
 export default async function CompaniesPage({
@@ -29,8 +30,14 @@ export default async function CompaniesPage({
 }) {
   const supabase = createClient();
   const q = searchParams.q?.trim() ?? '';
+  const showDeleted = searchParams.deleted === '1';
 
   let query = supabase.from('companies').select('*').order('name');
+  if (showDeleted) {
+    query = query.eq('is_deleted', true);
+  } else {
+    query = query.eq('is_deleted', false);
+  }
   if (q) query = query.ilike('name', `%${q}%`);
   const { data: companiesData } = await query;
   const companies = (companiesData ?? []) as Company[];
@@ -56,11 +63,26 @@ export default async function CompaniesPage({
         subtitle="배출자 마스터"
         breadcrumb={[{ label: '에이스알앤씨' }, { label: '거래처' }]}
         actions={
-          <Link href="/companies/new">
-            <Button size="sm">
-              <Plus className="mr-1.5 h-3.5 w-3.5" strokeWidth={1.75} />새 거래처
-            </Button>
-          </Link>
+          <>
+            {showDeleted ? (
+              <Link href="/companies">
+                <Button size="sm" variant="outline">
+                  활성 거래처 보기
+                </Button>
+              </Link>
+            ) : (
+              <Link href="/companies?deleted=1">
+                <Button size="sm" variant="outline">
+                  삭제된 거래처
+                </Button>
+              </Link>
+            )}
+            <Link href="/companies/new">
+              <Button size="sm">
+                <Plus className="mr-1.5 h-3.5 w-3.5" strokeWidth={1.75} />새 거래처
+              </Button>
+            </Link>
+          </>
         }
       />
 
@@ -84,7 +106,9 @@ export default async function CompaniesPage({
               </Link>
             )}
           </form>
-          <span className="text-[11px] text-foreground-muted">총 {companies.length}곳</span>
+          <span className="text-[11px] text-foreground-muted">
+            {showDeleted ? '삭제됨' : '활성'} {companies.length}곳
+          </span>
         </div>
 
         <div className="flex-1 overflow-y-auto p-7">

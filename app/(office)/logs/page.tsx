@@ -44,10 +44,11 @@ export default async function LogsPage({
   const reviewEnabled = await getReviewProcessEnabled();
   const statusFilters = reviewEnabled ? statusFiltersAll : statusFiltersWithoutReview;
 
-  // 거래처 목록 (필터 select 용)
+  // 거래처 목록 (필터 select 용 — 활성만)
   const { data: companiesData } = await supabase
     .from('companies')
     .select('id, name')
+    .eq('is_deleted', false)
     .order('name');
   const companies = (companiesData ?? []) as Array<{ id: string; name: string }>;
 

@@ -49,6 +49,7 @@ export default async function InvoicesPage({
     .from('companies')
     .select('id, name')
     .eq('is_internal', false)
+    .eq('is_deleted', false)
     .order('name');
   const companies = (companiesData ?? []) as Array<{ id: string; name: string }>;
 

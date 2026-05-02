@@ -24,6 +24,7 @@ export async function searchCompanies(
   const { data, error } = await supabase
     .from('companies')
     .select('id, name, business_no, default_unit_price, is_internal')
+    .eq('is_deleted', false)
     .ilike('name', `%${trimmed}%`)
     .limit(limit * 2);
   if (error || !data) return [];

@@ -138,43 +138,88 @@ export function InvoicePreview({
                   </td>
                 </tr>
               ) : (
-                logs.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="border-b border-divider print:border-gray-300"
-                  >
-                    <td className="border-r border-divider p-1.5 text-center font-mono print:border-gray-300">
-                      {formatDate(row.log_date)}
-                    </td>
-                    <td className="border-r border-divider p-1.5 text-center print:border-gray-300">
-                      {directionLabel[row.direction]}
-                    </td>
-                    <td className="border-r border-divider p-1.5 print:border-gray-300">
-                      {row.sites?.name ?? '—'}
-                    </td>
-                    <td className="border-r border-divider p-1.5 print:border-gray-300">
-                      {row.waste_types?.name ?? '—'}
-                    </td>
-                    <td className="border-r border-divider p-1.5 text-center font-mono print:border-gray-300">
-                      {row.vehicle_no ?? '—'}
-                    </td>
-                    <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
-                      {formatNumber(row.weight_kg)}
-                    </td>
-                    <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
-                      {formatNumber(row.unit_price)}
-                    </td>
-                    <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
-                      {formatNumber(row.supply_amount)}
-                    </td>
-                    <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
-                      {formatNumber(row.vat)}
-                    </td>
-                    <td className="p-1.5 text-right font-mono">
-                      {formatNumber(row.total_amount)}
-                    </td>
-                  </tr>
-                ))
+                logs.flatMap((row) => {
+                  const transportFee = Number(row.transport_fee ?? 0);
+                  const supplyTotal = row.supply_amount ?? 0;
+                  const vatTotal = row.vat ?? 0;
+                  const totalAmount = row.total_amount ?? 0;
+                  // 운반비를 별도 행으로 분리: 본 행은 자재(중량×단가) 분만, 추가 행은 운반비 분.
+                  const hasTransport = transportFee > 0;
+                  const transportVat = hasTransport
+                    ? Math.round(vatTotal > 0 ? transportFee * (vatTotal / supplyTotal) : 0)
+                    : 0;
+                  const transportTotal = transportFee + transportVat;
+                  const mainSupply = hasTransport ? supplyTotal - transportFee : supplyTotal;
+                  const mainVat = hasTransport ? vatTotal - transportVat : vatTotal;
+                  const mainTotal = hasTransport ? totalAmount - transportTotal : totalAmount;
+
+                  const rows = [
+                    <tr
+                      key={row.id}
+                      className="border-b border-divider print:border-gray-300"
+                    >
+                      <td className="border-r border-divider p-1.5 text-center font-mono print:border-gray-300">
+                        {formatDate(row.log_date)}
+                      </td>
+                      <td className="border-r border-divider p-1.5 text-center print:border-gray-300">
+                        {directionLabel[row.direction]}
+                      </td>
+                      <td className="border-r border-divider p-1.5 print:border-gray-300">
+                        {row.sites?.name ?? '—'}
+                      </td>
+                      <td className="border-r border-divider p-1.5 print:border-gray-300">
+                        {row.waste_types?.name ?? '—'}
+                      </td>
+                      <td className="border-r border-divider p-1.5 text-center font-mono print:border-gray-300">
+                        {row.vehicle_no ?? '—'}
+                      </td>
+                      <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
+                        {formatNumber(row.weight_kg)}
+                      </td>
+                      <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
+                        {formatNumber(row.unit_price)}
+                      </td>
+                      <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
+                        {formatNumber(mainSupply)}
+                      </td>
+                      <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
+                        {formatNumber(mainVat)}
+                      </td>
+                      <td className="p-1.5 text-right font-mono">
+                        {formatNumber(mainTotal)}
+                      </td>
+                    </tr>,
+                  ];
+
+                  if (hasTransport) {
+                    rows.push(
+                      <tr
+                        key={`${row.id}-tf`}
+                        className="border-b border-divider print:border-gray-300"
+                      >
+                        <td className="border-r border-divider p-1.5 text-center font-mono text-foreground-muted print:border-gray-300 print:text-gray-500"></td>
+                        <td className="border-r border-divider p-1.5 text-center text-foreground-muted print:border-gray-300 print:text-gray-500"></td>
+                        <td className="border-r border-divider p-1.5 print:border-gray-300"></td>
+                        <td className="border-r border-divider p-1.5 print:border-gray-300">
+                          운반비
+                        </td>
+                        <td className="border-r border-divider p-1.5 print:border-gray-300"></td>
+                        <td className="border-r border-divider p-1.5 print:border-gray-300"></td>
+                        <td className="border-r border-divider p-1.5 print:border-gray-300"></td>
+                        <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
+                          {formatNumber(transportFee)}
+                        </td>
+                        <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
+                          {formatNumber(transportVat)}
+                        </td>
+                        <td className="p-1.5 text-right font-mono">
+                          {formatNumber(transportTotal)}
+                        </td>
+                      </tr>,
+                    );
+                  }
+                  return rows;
+                })
               )}
             </tbody>
             {logs.length > 0 && (
@@ -221,7 +266,11 @@ export function InvoicePreview({
         {/* 서명란 */}
         <div className="mt-8 grid grid-cols-2 gap-6 text-xs">
           <SignatureBox label="공급받는자" name={company.name} />
-          <SignatureBox label="공급자" name={selfCompany.name} />
+          <SignatureBox
+            label="공급자"
+            name={selfCompany.name}
+            stampUrl={selfCompany.stamp_url ?? null}
+          />
         </div>
 
         <p className="mt-6 text-center text-[10px] text-foreground-muted print:text-gray-600">
@@ -284,11 +333,27 @@ function SummaryBox({
   );
 }
 
-function SignatureBox({ label, name }: { label: string; name: string }) {
+function SignatureBox({
+  label,
+  name,
+  stampUrl,
+}: {
+  label: string;
+  name: string;
+  stampUrl?: string | null;
+}) {
   return (
-    <div className="border border-foreground p-3 print:border-black">
+    <div className="relative border border-foreground p-3 print:border-black">
       <div className="text-[10.5px] text-foreground-muted print:text-gray-700">{label}</div>
       <div className="mt-1 text-sm font-medium">{name}</div>
+      {stampUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={stampUrl}
+          alt="날인"
+          className="absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
+        />
+      )}
       <div className="mt-6 text-right text-[10px] text-foreground-muted print:text-gray-600">
         (서명 또는 인)
       </div>

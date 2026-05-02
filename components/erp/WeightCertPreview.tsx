@@ -126,7 +126,11 @@ function CopyBlock({
 
       {/* 서명 */}
       <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-        <SignatureRow label="계량담당자" name={selfCompany.name} />
+        <SignatureRow
+          label="계량담당자"
+          name={selfCompany.name}
+          stampUrl={selfCompany.stamp_url ?? null}
+        />
         <SignatureRow label="수령인" name="_______________" />
       </div>
     </div>
@@ -191,11 +195,27 @@ function WeightCell({
   );
 }
 
-function SignatureRow({ label, name }: { label: string; name: string }) {
+function SignatureRow({
+  label,
+  name,
+  stampUrl,
+}: {
+  label: string;
+  name: string;
+  stampUrl?: string | null;
+}) {
   return (
-    <div className="flex items-center gap-2 border border-foreground px-2 py-1.5 text-[11px] print:border-black">
+    <div className="relative flex items-center gap-2 border border-foreground px-2 py-1.5 text-[11px] print:border-black">
       <span className="text-foreground-muted print:text-gray-700">{label}</span>
       <span className="flex-1 truncate">{name}</span>
+      {stampUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={stampUrl}
+          alt="날인"
+          className="absolute right-12 top-1/2 h-8 w-8 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
+        />
+      )}
       <span className="text-[9px] text-foreground-muted">(서명)</span>
     </div>
   );

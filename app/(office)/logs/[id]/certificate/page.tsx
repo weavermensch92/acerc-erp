@@ -27,11 +27,14 @@ interface LogDetail {
 
 export default async function CertificatePage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { selfAsProcessor?: string };
 }) {
   const supabase = createClient();
   const selfCompany = await getSelfCompanyInfo(supabase);
+  const selfAsProcessor = searchParams.selfAsProcessor === '1';
 
   const { data } = await supabase
     .from('waste_logs')
@@ -75,6 +78,20 @@ export default async function CertificatePage({
         }
       />
       <div className="flex-1 overflow-y-auto p-7 print:p-0">
+        {selfCompany.stamp_url && (
+          <div className="mb-4 flex items-center justify-end gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs print:hidden">
+            <span className="text-foreground-muted">처리자에도 자사 도장 적용:</span>
+            <Link
+              href={`?selfAsProcessor=${selfAsProcessor ? '0' : '1'}`}
+              className="rounded-full border border-border px-3 py-1 font-medium hover:bg-background-subtle"
+            >
+              {selfAsProcessor ? '✓ 적용 중 (해제)' : '적용하기'}
+            </Link>
+            <span className="text-[10.5px] text-foreground-muted">
+              자사가 처리장 역할도 하는 경우만 사용
+            </span>
+          </div>
+        )}
         <CertificatePreview
           serial={params.id.slice(0, 8).toUpperCase()}
           log={{
@@ -86,6 +103,7 @@ export default async function CertificatePage({
           selfCompany={selfCompany}
           plant={detail.treatment_plants}
           wasteType={detail.waste_types}
+          selfAsProcessor={selfAsProcessor}
         />
       </div>
     </>

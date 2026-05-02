@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { PageHeader } from '@/components/erp/PageHeader';
 import { Button } from '@/components/ui/button';
 import { PrintButton } from '@/components/erp/PrintButton';
+import { WeightCertExcelButton } from '@/components/erp/WeightCertExcelButton';
 import { WeightCertPreview } from '@/components/erp/WeightCertPreview';
 import { createClient } from '@/lib/supabase/server';
 import { getSelfCompanyInfo } from '@/lib/settings';
@@ -58,6 +59,25 @@ export default async function WeightCertPage({
         actions={
           <>
             <PrintButton label="인쇄 / PDF 저장" />
+            <WeightCertExcelButton
+              serial={params.id.slice(0, 8).toUpperCase()}
+              log={{
+                log_date: detail.log_date,
+                vehicle_no: detail.vehicle_no,
+                weight_total_kg: detail.weight_total_kg,
+                weight_tare_kg: detail.weight_tare_kg,
+                weight_kg: detail.weight_kg,
+              }}
+              company={detail.companies}
+              selfCompany={selfCompany}
+              plant={
+                detail.treatment_plants ??
+                (detail.treatment_plant_name_snapshot
+                  ? { name: detail.treatment_plant_name_snapshot }
+                  : null)
+              }
+              wasteType={detail.waste_types}
+            />
             <Link href={`/logs/${params.id}`}>
               <Button size="sm" variant="outline">
                 <ArrowLeft className="mr-1.5 h-3.5 w-3.5" strokeWidth={1.75} />

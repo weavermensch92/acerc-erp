@@ -4,6 +4,7 @@ import { getSelfCompanyInfo } from '@/lib/settings';
 import { formatKRW, formatKg, formatDate, formatMonth } from '@/lib/format';
 import { Pill } from '@/components/erp/Pill';
 import { SharePrintButton } from '@/components/erp/SharePrintButton';
+import { ShareExcelButton } from '@/components/erp/ShareExcelButton';
 import {
   InvoicePreview,
   type InvoiceLog,
@@ -301,14 +302,20 @@ export default async function SharePage({ params, searchParams }: SharePageProps
             periodTo={end}
             shareToken={token}
           />
-          <button
-            type="button"
-            disabled
-            className="cursor-not-allowed rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground-muted opacity-60"
-            title="Phase 2 예정"
-          >
-            엑셀 다운로드 (Phase 2)
-          </button>
+          <ShareExcelButton
+            company={{
+              id: company.id,
+              name: company.name,
+              business_no: company.business_no,
+              address: company.address,
+              contact_name: company.contact_name,
+              contact_phone: company.contact_phone,
+            }}
+            selfCompany={selfCompany}
+            period={{ from: start, to: end }}
+            logs={rows as unknown as InvoiceLog[]}
+            shareToken={token}
+          />
         </div>
 
         <footer className="pt-6 text-center text-[11px] text-foreground-muted">

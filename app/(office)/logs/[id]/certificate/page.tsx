@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { PageHeader } from '@/components/erp/PageHeader';
 import { Button } from '@/components/ui/button';
 import { PrintButton } from '@/components/erp/PrintButton';
+import { CertificateExcelButton } from '@/components/erp/CertificateExcelButton';
 import { CertificatePreview } from '@/components/erp/CertificatePreview';
 import { createClient } from '@/lib/supabase/server';
 import { getSelfCompanyInfo } from '@/lib/settings';
@@ -70,6 +71,24 @@ export default async function CertificatePage({
         actions={
           <>
             <PrintButton label="인쇄 / PDF 저장" />
+            <CertificateExcelButton
+              serial={params.id.slice(0, 8).toUpperCase()}
+              log={{
+                log_date: detail.log_date,
+                vehicle_no: detail.vehicle_no,
+                weight_kg: detail.weight_kg,
+              }}
+              company={detail.companies}
+              selfCompany={selfCompany}
+              plant={
+                detail.treatment_plants ??
+                (detail.treatment_plant_name_snapshot
+                  ? { name: detail.treatment_plant_name_snapshot, address: null }
+                  : null)
+              }
+              wasteType={detail.waste_types}
+              selfAsProcessor={selfAsProcessor}
+            />
             <Link href={`/logs/${params.id}`}>
               <Button size="sm" variant="outline">
                 <ArrowLeft className="mr-1.5 h-3.5 w-3.5" strokeWidth={1.75} />

@@ -9,80 +9,61 @@ import {
 } from '@/components/erp/TopCompaniesCard';
 import { RecentLogsCard, type RecentLog } from '@/components/erp/RecentLogsCard';
 import { QuickActions } from '@/components/erp/QuickActions';
-import { DashboardPeriodPicker } from '@/components/erp/DashboardPeriodPicker';
+import { DateRangePicker } from '@/components/erp/DateRangePicker';
 import { createClient } from '@/lib/supabase/server';
 import { getReviewProcessEnabled } from '@/lib/settings';
-import { formatKRW, formatNumber, formatMonth, formatDate } from '@/lib/format';
+import { formatKRW, formatNumber } from '@/lib/format';
 import type { Direction } from '@/lib/types/database';
+import { format, addDays, differenceInCalendarDays, parseISO, subDays } from 'date-fns';
+import { ko } from 'date-fns/locale';
 
 export const dynamic = 'force-dynamic';
 
-type Mode = 'daily' | 'monthly';
+const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
 
 interface PeriodRange {
-  mode: Mode;
-  start: string; // YYYY-MM-DD inclusive
-  end: string;   // YYYY-MM-DD inclusive
-  prevStart: string;
-  prevEnd: string;
-  label: string; // 화면 표시용
-  chartFromDate: string; // 차트에 보여줄 시작일
-  chartToDate: string;   // 차트에 보여줄 종료일
+  from: string;
+  to: string;
+  prevFrom: string;
+  prevTo: string;
+  label: string;
+  days: number;
 }
 
-function fmt(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+function parsePeriod(searchParams: { from?: string; to?: string }): PeriodRange {
+  const today = new Date();
+  const isoRe = /^\d{4}-\d{2}-\d{2}$/;
+  // 기본값: 당월 1일 ~ 말일
+  const defFrom = new Date(today.getFullYear(), today.getMonth(), 1);
+  const defTo = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-function parsePeriodFromParams(searchParams: {
-  mode?: string;
-  date?: string;
-  month?: string;
-}): PeriodRange {
-  const now = new Date();
-  const mode: Mode = searchParams.mode === 'daily' ? 'daily' : 'monthly';
+  const fromStr =
+    searchParams.from && isoRe.test(searchParams.from) ? searchParams.from : fmt(defFrom);
+  const toStr =
+    searchParams.to && isoRe.test(searchParams.to) ? searchParams.to : fmt(defTo);
 
-  if (mode === 'daily') {
-    const dateStr =
-      searchParams.date && /^\d{4}-\d{2}-\d{2}$/.test(searchParams.date)
-        ? searchParams.date
-        : fmt(now);
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const target = new Date(y, m - 1, d);
-    const prev = new Date(y, m - 1, d - 1);
-    // 차트는 선택일 기준 14일치
-    const chartStart = new Date(y, m - 1, d - 13);
-    return {
-      mode,
-      start: fmt(target),
-      end: fmt(target),
-      prevStart: fmt(prev),
-      prevEnd: fmt(prev),
-      label: formatDate(target, 'yyyy년 M월 d일'),
-      chartFromDate: fmt(chartStart),
-      chartToDate: fmt(target),
-    };
-  }
+  // 잘못된 순서 보정
+  let from = parseISO(fromStr);
+  let to = parseISO(toStr);
+  if (to < from) [from, to] = [to, from];
 
-  // monthly (default)
-  const monthStr =
-    searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month)
-      ? searchParams.month
-      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const [y, m] = monthStr.split('-').map(Number);
-  const start = new Date(y, m - 1, 1);
-  const end = new Date(y, m, 0);
-  const prevStart = new Date(y, m - 2, 1);
-  const prevEnd = new Date(y, m - 1, 0);
+  const days = differenceInCalendarDays(to, from) + 1;
+  // 직전 동일 길이 기간
+  const prevTo = subDays(from, 1);
+  const prevFrom = subDays(prevTo, days - 1);
+
+  const sameDay = days === 1;
+  const label = sameDay
+    ? format(from, 'yyyy.MM.dd', { locale: ko })
+    : `${format(from, 'yyyy.MM.dd', { locale: ko })} ~ ${format(to, 'yyyy.MM.dd', { locale: ko })}`;
+
   return {
-    mode,
-    start: fmt(start),
-    end: fmt(end),
-    prevStart: fmt(prevStart),
-    prevEnd: fmt(prevEnd),
-    label: formatMonth(start),
-    chartFromDate: fmt(start),
-    chartToDate: fmt(end),
+    from: fmt(from),
+    to: fmt(to),
+    prevFrom: fmt(prevFrom),
+    prevTo: fmt(prevTo),
+    label,
+    days,
   };
 }
 
@@ -101,7 +82,7 @@ function calcDelta(current: number, previous: number): DeltaInfo | null {
   };
 }
 
-type MonthRow = {
+type Row = {
   total_amount: number | null;
   is_invoiced: boolean;
   is_paid: boolean;
@@ -141,7 +122,7 @@ function aggregate(
   };
 }
 
-function buildTop5(rows: MonthRow[], dir: Direction): CompanyRanking[] {
+function buildTop5(rows: Row[], dir: Direction): CompanyRanking[] {
   const agg = new Map<string, { name: string; amount: number; count: number }>();
   for (const r of rows) {
     if (r.direction !== dir) continue;
@@ -158,14 +139,12 @@ function buildTop5(rows: MonthRow[], dir: Direction): CompanyRanking[] {
     .slice(0, 5);
 }
 
-function enumerateDays(from: string, to: string): string[] {
+function enumerateDays(fromStr: string, toStr: string): string[] {
   const result: string[] = [];
-  const [fy, fm, fd] = from.split('-').map(Number);
-  const [ty, tm, td] = to.split('-').map(Number);
-  const start = new Date(fy, fm - 1, fd);
-  const end = new Date(ty, tm - 1, td);
-  for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
-    result.push(fmt(cur));
+  const start = parseISO(fromStr);
+  const end = parseISO(toStr);
+  for (let d = start; d <= end; d = addDays(d, 1)) {
+    result.push(fmt(d));
   }
   return result;
 }
@@ -173,39 +152,35 @@ function enumerateDays(from: string, to: string): string[] {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { mode?: string; date?: string; month?: string };
+  searchParams: { from?: string; to?: string };
 }) {
   const supabase = createClient();
-  const period = parsePeriodFromParams(searchParams);
+  const period = parsePeriod(searchParams);
 
-  // 선택 기간 active 일보
   const { data: thisData } = await supabase
     .from('waste_logs')
     .select(
       `total_amount, is_invoiced, is_paid, direction, company_id,
        companies(name)`,
     )
-    .gte('log_date', period.start)
-    .lte('log_date', period.end)
+    .gte('log_date', period.from)
+    .lte('log_date', period.to)
     .eq('status', 'active');
 
-  // 직전 기간 (delta 계산용)
   const { data: prevData } = await supabase
     .from('waste_logs')
     .select('total_amount, is_invoiced, is_paid, direction')
-    .gte('log_date', period.prevStart)
-    .lte('log_date', period.prevEnd)
+    .gte('log_date', period.prevFrom)
+    .lte('log_date', period.prevTo)
     .eq('status', 'active');
 
-  // 차트용 일별 데이터
   const { data: chartData } = await supabase
     .from('waste_logs')
     .select('log_date, direction, weight_kg')
-    .gte('log_date', period.chartFromDate)
-    .lte('log_date', period.chartToDate)
+    .gte('log_date', period.from)
+    .lte('log_date', period.to)
     .neq('status', 'archived');
 
-  // 최근 5건 (글로벌)
   const { data: recent } = await supabase
     .from('waste_logs')
     .select(
@@ -227,7 +202,7 @@ export default async function DashboardPage({
     pendingCount = count ?? 0;
   }
 
-  const thisRows = (thisData ?? []) as unknown as MonthRow[];
+  const thisRows = (thisData ?? []) as unknown as Row[];
   const prevRows = (prevData ?? []) as PrevRow[];
 
   const inStats = aggregate(thisRows, 'in');
@@ -238,7 +213,7 @@ export default async function DashboardPage({
   type DayRow = { log_date: string; direction: Direction; weight_kg: number | null };
   const chartRows = (chartData ?? []) as DayRow[];
   const dayMap = new Map<string, { inKg: number; outKg: number }>();
-  for (const d of enumerateDays(period.chartFromDate, period.chartToDate)) {
+  for (const d of enumerateDays(period.from, period.to)) {
     dayMap.set(d, { inKg: 0, outKg: 0 });
   }
   for (const r of chartRows) {
@@ -248,10 +223,7 @@ export default async function DashboardPage({
     if (r.direction === 'in') bucket.inKg += w;
     else bucket.outKg += w;
   }
-  const buckets: DailyBucket[] = enumerateDays(
-    period.chartFromDate,
-    period.chartToDate,
-  ).map((date) => ({
+  const buckets: DailyBucket[] = enumerateDays(period.from, period.to).map((date) => ({
     date,
     inKg: dayMap.get(date)!.inKg,
     outKg: dayMap.get(date)!.outKg,
@@ -260,24 +232,15 @@ export default async function DashboardPage({
   const topInCompanies = buildTop5(thisRows, 'in');
   const topOutCompanies = buildTop5(thisRows, 'out');
 
-  const periodSubtitle =
-    period.mode === 'daily'
-      ? `${period.label} 일간 · 직전일 대비`
-      : `${period.label} 월간 · 직전월 대비`;
+  const subtitle = `${period.label} (${period.days}일) · 직전 ${period.days}일 대비`;
 
   return (
     <>
       <PageHeader
         title="대시보드"
-        subtitle={periodSubtitle}
+        subtitle={subtitle}
         breadcrumb={[{ label: '에이스알앤씨' }, { label: '대시보드' }]}
-        actions={
-          <DashboardPeriodPicker
-            mode={period.mode}
-            date={period.mode === 'daily' ? period.start : ''}
-            month={period.mode === 'monthly' ? period.start.slice(0, 7) : ''}
-          />
-        }
+        actions={<DateRangePicker from={period.from} to={period.to} />}
       />
       <div className="flex-1 space-y-5 overflow-y-auto p-7">
         {pendingCount !== null && pendingCount > 0 && (
@@ -309,7 +272,7 @@ export default async function DashboardPage({
               반입 <span className="text-foreground-muted">(매출 · 거래처 청구)</span>
             </h2>
             <Link
-              href={`/logs?direction=in&from=${period.start}&to=${period.end}`}
+              href={`/logs?direction=in&from=${period.from}&to=${period.to}`}
               className="text-[11.5px] text-foreground-muted hover:underline"
             >
               반입 일보 보기 →
@@ -352,7 +315,7 @@ export default async function DashboardPage({
               반출 <span className="text-foreground-muted">(매입 · 처리장 지급)</span>
             </h2>
             <Link
-              href={`/logs?direction=out&from=${period.start}&to=${period.end}`}
+              href={`/logs?direction=out&from=${period.from}&to=${period.to}`}
               className="text-[11.5px] text-foreground-muted hover:underline"
             >
               반출 일보 보기 →
@@ -393,11 +356,7 @@ export default async function DashboardPage({
           <div className="rounded-[10px] border border-border bg-surface p-5 shadow-sm">
             <InOutChart
               buckets={buckets}
-              title={
-                period.mode === 'daily'
-                  ? `최근 14일 반입·반출 (${period.label} 기준)`
-                  : `${period.label} 일별 반입·반출`
-              }
+              title={`${period.label} 일별 반입·반출`}
             />
           </div>
           <div className="space-y-3">

@@ -47,6 +47,12 @@ export function InvoicePreview({
   const totals = {
     count: logs.length,
     weightKg: logs.reduce((s, r) => s + Number(r.weight_kg ?? 0), 0),
+    transport: logs.reduce((s, r) => s + Number(r.transport_fee ?? 0), 0),
+    // 운반비 제외 자재 공급가액 (= 중량 × 단가 분)
+    goodsSupply: logs.reduce(
+      (s, r) => s + ((r.supply_amount ?? 0) - Number(r.transport_fee ?? 0)),
+      0,
+    ),
     supply: logs.reduce((s, r) => s + (r.supply_amount ?? 0), 0),
     vat: logs.reduce((s, r) => s + (r.vat ?? 0), 0),
     total: logs.reduce((s, r) => s + (r.total_amount ?? 0), 0),
@@ -121,6 +127,9 @@ export function InvoicePreview({
                   단가(원)
                 </th>
                 <th className="border-r border-foreground p-1.5 text-center print:border-black">
+                  운반비
+                </th>
+                <th className="border-r border-foreground p-1.5 text-center print:border-black">
                   공급가액
                 </th>
                 <th className="border-r border-foreground p-1.5 text-center print:border-black">
@@ -133,29 +142,19 @@ export function InvoicePreview({
               {logs.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="p-6 text-center text-foreground-muted print:text-gray-500"
                   >
                     해당 기간 거래가 없습니다.
                   </td>
                 </tr>
               ) : (
-                logs.flatMap((row) => {
+                logs.map((row) => {
                   const transportFee = Number(row.transport_fee ?? 0);
                   const supplyTotal = row.supply_amount ?? 0;
-                  const vatTotal = row.vat ?? 0;
-                  const totalAmount = row.total_amount ?? 0;
-                  // 운반비를 별도 행으로 분리: 본 행은 자재(중량×단가) 분만, 추가 행은 운반비 분.
-                  const hasTransport = transportFee > 0;
-                  const transportVat = hasTransport
-                    ? Math.round(vatTotal > 0 ? transportFee * (vatTotal / supplyTotal) : 0)
-                    : 0;
-                  const transportTotal = transportFee + transportVat;
-                  const mainSupply = hasTransport ? supplyTotal - transportFee : supplyTotal;
-                  const mainVat = hasTransport ? vatTotal - transportVat : vatTotal;
-                  const mainTotal = hasTransport ? totalAmount - transportTotal : totalAmount;
-
-                  const rows = [
+                  // 자재 공급가액 = 전체 supply - 운반비
+                  const goodsSupply = supplyTotal - transportFee;
+                  return (
                     <tr
                       key={row.id}
                       className="border-b border-divider print:border-gray-300"
@@ -182,45 +181,19 @@ export function InvoicePreview({
                         {formatNumber(row.unit_price)}
                       </td>
                       <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
-                        {formatNumber(mainSupply)}
+                        {transportFee > 0 ? formatNumber(transportFee) : '—'}
                       </td>
                       <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
-                        {formatNumber(mainVat)}
+                        {formatNumber(goodsSupply)}
+                      </td>
+                      <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
+                        {formatNumber(row.vat)}
                       </td>
                       <td className="p-1.5 text-right font-mono">
-                        {formatNumber(mainTotal)}
+                        {formatNumber(row.total_amount)}
                       </td>
-                    </tr>,
-                  ];
-
-                  if (hasTransport) {
-                    rows.push(
-                      <tr
-                        key={`${row.id}-tf`}
-                        className="border-b border-divider print:border-gray-300"
-                      >
-                        <td className="border-r border-divider p-1.5 text-center font-mono text-foreground-muted print:border-gray-300 print:text-gray-500"></td>
-                        <td className="border-r border-divider p-1.5 text-center text-foreground-muted print:border-gray-300 print:text-gray-500"></td>
-                        <td className="border-r border-divider p-1.5 print:border-gray-300"></td>
-                        <td className="border-r border-divider p-1.5 print:border-gray-300">
-                          운반비
-                        </td>
-                        <td className="border-r border-divider p-1.5 print:border-gray-300"></td>
-                        <td className="border-r border-divider p-1.5 print:border-gray-300"></td>
-                        <td className="border-r border-divider p-1.5 print:border-gray-300"></td>
-                        <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
-                          {formatNumber(transportFee)}
-                        </td>
-                        <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
-                          {formatNumber(transportVat)}
-                        </td>
-                        <td className="p-1.5 text-right font-mono">
-                          {formatNumber(transportTotal)}
-                        </td>
-                      </tr>,
-                    );
-                  }
-                  return rows;
+                    </tr>
+                  );
                 })
               )}
             </tbody>
@@ -238,7 +211,10 @@ export function InvoicePreview({
                   </td>
                   <td className="border-r border-foreground print:border-black"></td>
                   <td className="border-r border-foreground p-1.5 text-right font-mono font-semibold print:border-black">
-                    {formatNumber(totals.supply)}
+                    {totals.transport > 0 ? formatNumber(totals.transport) : '—'}
+                  </td>
+                  <td className="border-r border-foreground p-1.5 text-right font-mono font-semibold print:border-black">
+                    {formatNumber(totals.goodsSupply)}
                   </td>
                   <td className="border-r border-foreground p-1.5 text-right font-mono font-semibold print:border-black">
                     {formatNumber(totals.vat)}

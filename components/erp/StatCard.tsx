@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Pill } from '@/components/erp/Pill';
 
@@ -16,6 +17,7 @@ interface StatCardProps {
   tone?: Tone;
   delta?: DeltaInfo | null;
   className?: string;
+  href?: string;
 }
 
 const toneClasses: Record<Tone, string> = {
@@ -32,15 +34,17 @@ export function StatCard({
   tone = 'neutral',
   delta,
   className,
+  href,
 }: StatCardProps) {
-  return (
-    <div
-      className={cn(
-        'flex flex-col gap-2 rounded-[10px] border bg-surface p-4 shadow-sm',
-        toneClasses[tone],
-        className,
-      )}
-    >
+  const baseClass = cn(
+    'flex flex-col gap-2 rounded-[10px] border bg-surface p-4 shadow-sm',
+    toneClasses[tone],
+    href && 'transition-colors hover:border-foreground/40 hover:bg-background-subtle/40',
+    className,
+  );
+
+  const inner = (
+    <>
       <div className="flex items-start justify-between gap-2">
         <span className="text-[11.5px] font-medium text-foreground-muted">{label}</span>
         {delta && (
@@ -53,6 +57,15 @@ export function StatCard({
         {value}
       </span>
       {hint && <span className="text-[11px] text-foreground-muted">{hint}</span>}
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className={baseClass}>
+        {inner}
+      </Link>
+    );
+  }
+  return <div className={baseClass}>{inner}</div>;
 }

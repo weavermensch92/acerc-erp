@@ -25,6 +25,11 @@ export interface InvoiceCompanyInfo {
   address: string | null;
   contact_name: string | null;
   contact_phone: string | null;
+  // 홈택스 일괄발행에 필요한 옵셔널 필드 — UI 노출은 옵션
+  representative?: string | null;
+  business_type?: string | null;
+  business_item?: string | null;
+  email?: string | null;
 }
 
 interface Props {

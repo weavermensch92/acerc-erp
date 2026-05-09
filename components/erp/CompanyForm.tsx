@@ -17,6 +17,10 @@ export interface CompanyFormDefaults {
   address: string;
   contact_name: string;
   contact_phone: string;
+  representative: string;
+  business_type: string;
+  business_item: string;
+  email: string;
   default_unit_price: number | '';
   is_internal: boolean;
 }
@@ -50,6 +54,10 @@ export function CompanyForm(props: CompanyFormProps) {
       address: data.address?.trim() || null,
       contact_name: data.contact_name?.trim() || null,
       contact_phone: data.contact_phone?.trim() || null,
+      representative: data.representative?.trim() || null,
+      business_type: data.business_type?.trim() || null,
+      business_item: data.business_item?.trim() || null,
+      email: data.email?.trim() || null,
       default_unit_price: data.default_unit_price === '' ? null : Number(data.default_unit_price),
       is_internal: data.is_internal,
     };
@@ -127,6 +135,37 @@ export function CompanyForm(props: CompanyFormProps) {
             />
           </div>
         </div>
+      </Section>
+
+      <Section title="세금계산서 (홈택스 일괄발행용)">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="cf-rep">대표자명</Label>
+            <Input id="cf-rep" {...register('representative')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cf-email">이메일 (수신용)</Label>
+            <Input
+              id="cf-email"
+              type="email"
+              {...register('email')}
+              placeholder="contact@example.com"
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="cf-bt">업태</Label>
+            <Input id="cf-bt" {...register('business_type')} placeholder="제조업" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cf-bi">종목</Label>
+            <Input id="cf-bi" {...register('business_item')} placeholder="폐기물 처리" />
+          </div>
+        </div>
+        <p className="text-[11px] text-foreground-muted">
+          홈택스 전자세금계산서 일괄발행 양식에 들어가는 필드입니다. 비워두면 빈칸으로 출력됩니다.
+        </p>
       </Section>
 
       <Section title="구분">

@@ -67,6 +67,10 @@ const companySchema = z.object({
   address: z.string().max(500).optional().nullable(),
   contact_name: z.string().max(50).optional().nullable(),
   contact_phone: z.string().max(20).optional().nullable(),
+  representative: z.string().max(50).optional().nullable(),
+  business_type: z.string().max(100).optional().nullable(),
+  business_item: z.string().max(100).optional().nullable(),
+  email: z.string().max(200).optional().nullable(),
   default_unit_price: z.number().int().nonnegative().optional().nullable(),
   is_internal: z.boolean().default(false),
 });

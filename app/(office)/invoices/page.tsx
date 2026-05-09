@@ -108,7 +108,9 @@ export default async function InvoicesPage({
     const [companyRes, logsRes] = await Promise.all([
       supabase
         .from('companies')
-        .select('id, name, business_no, address, contact_name, contact_phone')
+        .select(
+          'id, name, business_no, address, contact_name, contact_phone, representative, business_type, business_item, email',
+        )
         .eq('id', searchParams.company)
         .maybeSingle(),
       logsQuery,

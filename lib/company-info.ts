@@ -13,6 +13,8 @@ export const selfCompanySchema = z.object({
   email: z.string().max(200).optional().nullable(),
   business_type: z.string().max(100).optional().nullable(),
   business_item: z.string().max(100).optional().nullable(),
+  permit_no: z.string().max(50).optional().nullable(),
+  processing_method: z.string().max(200).optional().nullable(),
   stamp_url: z.string().url().max(2000).optional().nullable(),
   stamp_path: z.string().max(500).optional().nullable(),
 });
@@ -30,6 +32,8 @@ export const DEFAULT_SELF_COMPANY: SelfCompanyInfo = {
   email: '',
   business_type: '폐기물 수집운반·처리업',
   business_item: '폐기물 처리',
+  permit_no: '',
+  processing_method: '',
   stamp_url: null,
   stamp_path: null,
 };

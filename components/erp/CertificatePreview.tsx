@@ -3,14 +3,12 @@ import type { SelfCompanyInfo } from '@/lib/company-info';
 
 interface CompanyInfo {
   name: string;
-  business_no: string | null;
+  representative: string | null;
   address: string | null;
-  contact_name: string | null;
-  contact_phone: string | null;
 }
 
-interface PlantInfo {
-  name: string;
+interface SiteInfo {
+  name: string | null;
   address: string | null;
 }
 
@@ -28,25 +26,23 @@ interface Props {
   serial?: string;
   log: LogInfo;
   company: CompanyInfo;
+  site: SiteInfo | null;
   selfCompany: SelfCompanyInfo;
-  plant: PlantInfo | null;
   wasteType: WasteTypeInfo;
   issuedAt?: Date;
-  // 자사가 처리장 역할도 하는 경우 — 처리자 서명란에도 자사 도장 표시
-  selfAsProcessor?: boolean;
 }
 
 // PRD § 시나리오 5 — 폐기물관리법 표준 양식 (간이 버전)
-// 3자(배출자/운반자/처리자) 정보 + 폐기물 정보 + 서명란.
+// ① 배출자 + ② 처리자(자사 고정) + ③ 폐기물 정보. ② 운반자 섹션·하단 3박스 서명 제거.
+// 자사정보 footer + ②처리자 박스 우측 상단에 도장.
 export function CertificatePreview({
   serial,
   log,
   company,
+  site,
   selfCompany,
-  plant,
   wasteType,
   issuedAt = new Date(),
-  selfAsProcessor = false,
 }: Props) {
   return (
     <div className="invoice-sheet mx-auto max-w-[820px] bg-surface text-foreground print:max-w-none print:bg-white">
@@ -63,40 +59,32 @@ export function CertificatePreview({
           <PartyTable
             title="① 배출자 (Generator)"
             rows={[
-              ['사업장명', company.name],
-              ['사업자번호', company.business_no ?? '—'],
+              ['상호', company.name],
+              ['대표자', company.representative ?? '—'],
               ['주소', company.address ?? '—'],
-              [
-                '담당자 / 연락처',
-                [company.contact_name, company.contact_phone].filter(Boolean).join(' · ') || '—',
-              ],
+              ['공사명', site?.name ?? '—'],
+              ['배출장소', site?.address ?? '—'],
+              ['일자', formatDate(log.log_date)],
             ]}
           />
           <PartyTable
-            title="② 운반자 (Transporter)"
+            title="② 처리자 (Processor)"
             rows={[
               ['상호', selfCompany.name],
-              ['사업자번호', selfCompany.business_no || '—'],
-              ['대표자', selfCompany.representative || '—'],
               ['주소', selfCompany.address || '—'],
-              ['연락처', selfCompany.phone || '—'],
+              ['허가번호', selfCompany.permit_no || '—'],
+              ['처리방법', selfCompany.processing_method || '—'],
+              ['전화번호', selfCompany.phone || '—'],
             ]}
+            stampUrl={selfCompany.stamp_url ?? null}
           />
           <PartyTable
-            title="③ 처리자 (Processor)"
-            rows={[
-              ['시설명', plant?.name ?? '—'],
-              ['주소', plant?.address ?? '—'],
-            ]}
-          />
-          <PartyTable
-            title="④ 폐기물 정보"
+            title="③ 폐기물 정보"
             rows={[
               ['배출일자', formatDate(log.log_date)],
               ['종류 (성상)', wasteType.name],
-              ['수량 (중량)', formatKg(log.weight_kg)],
+              ['중량', formatKg(log.weight_kg)],
               ['운반차량', log.vehicle_no ?? '—'],
-              ['처리방법', '소각 / 매립 / 재활용 등 (현장 기재)'],
             ]}
           />
         </div>
@@ -105,22 +93,21 @@ export function CertificatePreview({
           위 폐기물이 「폐기물관리법」에 따라 적법하게 운반·처리되었음을 확인합니다.
         </p>
 
-        <div className="mt-8 grid grid-cols-3 gap-3 text-xs">
-          <SignatureBox label="배출자" name={company.name} />
-          <SignatureBox
-            label="운반자"
-            name={selfCompany.name}
-            stampUrl={selfCompany.stamp_url ?? null}
-          />
-          <SignatureBox
-            label="처리자"
-            name={plant?.name ?? '—'}
-            stampUrl={selfAsProcessor ? selfCompany.stamp_url ?? null : null}
-          />
+        {/* 자사 정보 푸터 */}
+        <div className="mt-8 text-center text-xs leading-6">
+          <div className="font-semibold">{selfCompany.name}</div>
+          {selfCompany.address && <div>{selfCompany.address}</div>}
+          {(selfCompany.phone || selfCompany.fax) && (
+            <div>
+              {selfCompany.phone && <span>T.{selfCompany.phone}</span>}
+              {selfCompany.phone && selfCompany.fax && <span>{'  '}</span>}
+              {selfCompany.fax && <span>F.{selfCompany.fax}</span>}
+            </div>
+          )}
         </div>
 
-        <p className="mt-8 text-center text-[10px] text-foreground-muted print:text-gray-600">
-          본 확인서는 (주)에이스알앤씨 ERP 시스템에서 자동 발급된 양식입니다.
+        <p className="mt-6 text-center text-[10px] text-foreground-muted print:text-gray-600">
+          본 확인서는 {selfCompany.name} ERP 시스템에서 자동 발급된 양식입니다.
           실제 법정 서식과 차이가 있을 수 있어 행정 제출 전 확인이 필요합니다.
         </p>
       </div>
@@ -131,14 +118,16 @@ export function CertificatePreview({
 function PartyTable({
   title,
   rows,
+  stampUrl,
 }: {
   title: string;
   rows: Array<[string, string]>;
+  stampUrl?: string | null;
 }) {
   return (
-    <div className="border border-foreground print:border-black">
-      <div className="border-b border-foreground bg-background-subtle px-3 py-1.5 text-sm font-semibold print:border-black print:bg-gray-100">
-        {title}
+    <div className="relative border border-foreground print:border-black">
+      <div className="flex items-center justify-between border-b border-foreground bg-background-subtle px-3 py-1.5 print:border-black print:bg-gray-100">
+        <span className="text-sm font-semibold">{title}</span>
       </div>
       <table className="w-full text-sm">
         <tbody>
@@ -155,32 +144,14 @@ function PartyTable({
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function SignatureBox({
-  label,
-  name,
-  stampUrl,
-}: {
-  label: string;
-  name: string;
-  stampUrl?: string | null;
-}) {
-  return (
-    <div className="relative border border-foreground p-3 print:border-black">
-      <div className="text-[10.5px] text-foreground-muted print:text-gray-700">{label}</div>
-      <div className="mt-1 text-sm font-medium">{name}</div>
       {stampUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={stampUrl}
           alt="날인"
-          className="absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 object-contain opacity-90 print:opacity-100"
+          className="absolute right-3 top-2 h-16 w-16 object-contain opacity-90 print:opacity-100"
         />
       )}
-      <div className="mt-8 h-4" />
     </div>
   );
 }

@@ -33,6 +33,7 @@ interface InvoiceExcelInput {
   selfCompany: SelfCompanyInfo;
   period: { from: string; to: string };
   logs: InvoiceLog[];
+  siteName?: string | null;
   issuedAt?: Date;
 }
 
@@ -44,6 +45,7 @@ export function buildInvoiceWorkbook({
   selfCompany,
   period,
   logs,
+  siteName = null,
   issuedAt = new Date(),
 }: InvoiceExcelInput): XLSX.WorkBook {
   const aoa: (string | number | null)[][] = [];
@@ -90,14 +92,9 @@ export function buildInvoiceWorkbook({
   // 두 박스의 행 수가 다르니 (받는자 4행, 공급자 6행) 짧은 쪽 패딩
   const recvRows: [string, string][] = [
     ['상호', company.name],
-    ['사업자번호', company.business_no ?? '—'],
-    ['주소', company.address ?? '—'],
-    [
-      '담당자',
-      company.contact_name
-        ? `${company.contact_name}${company.contact_phone ? ` · ${company.contact_phone}` : ''}`
-        : '—',
-    ],
+    ['담당자', company.contact_name ?? '—'],
+    ['현장명', siteName ?? '—'],
+    ['폰번호', company.contact_phone ?? '—'],
   ];
   const supRows: [string, string][] = [
     ['상호', selfCompany.name],

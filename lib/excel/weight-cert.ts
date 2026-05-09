@@ -41,6 +41,7 @@ export interface WeightCertExcelInput {
   selfCompany: SelfCompanyInfo;
   plant: PlantInfo | null;
   wasteType: WasteTypeInfo;
+  siteName?: string | null;
   issuedAt?: Date;
 }
 
@@ -67,6 +68,7 @@ export function buildWeightCertWorkbook(
     selfCompany,
     plant,
     wasteType,
+    siteName = null,
     issuedAt = new Date(),
   } = input;
 
@@ -133,6 +135,12 @@ export function buildWeightCertWorkbook(
     stl(row, 0, row, 1, STYLE_LABEL);
     stl(row, 2, row, 5, STYLE_VALUE_MONO);
 
+    row = push(['현장명', null, siteName ?? '—', null, null, null]);
+    merge(row, 0, 1);
+    merge(row, 2, 5);
+    stl(row, 0, row, 1, STYLE_LABEL);
+    stl(row, 2, row, 5, STYLE_VALUE);
+
     push([]);
 
     // 중량 표 — 3 칸 (총중량 / 공차중량 / 실중량(primary))
@@ -171,6 +179,21 @@ export function buildWeightCertWorkbook(
       numFmt: 'General',
     });
     rowHeights[weightValueRow] = 28;
+
+    // 증명 문구
+    const certifyRow = push([
+      '* 상기와 같이 제품계량을 증명함',
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+    merge(certifyRow, 0, NCOL - 1);
+    stl(certifyRow, 0, certifyRow, NCOL - 1, {
+      font: { name: 'Malgun Gothic', sz: 10, bold: true, color: { rgb: '555555' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+    });
 
     push([]);
 

@@ -1,5 +1,8 @@
 import * as XLSX from 'xlsx-js-style';
-import type { SelfCompanyInfo } from '@/lib/company-info';
+import {
+  type SelfCompanyInfo,
+  DEFAULT_PROCESSING_METHOD,
+} from '@/lib/company-info';
 import {
   cols,
   fmtDate,
@@ -133,7 +136,7 @@ export function buildCertificateWorkbook(
     ['상호', selfCompany.name],
     ['주소', selfCompany.address || '—'],
     ['허가번호', selfCompany.permit_no || '—'],
-    ['처리방법', selfCompany.processing_method || '—'],
+    ['처리방법', selfCompany.processing_method || DEFAULT_PROCESSING_METHOD],
     ['전화번호', selfCompany.phone || '—'],
   ]);
 

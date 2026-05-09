@@ -353,6 +353,22 @@ export async function bulkUpdateLogsInlineAction(
   return { ok: failed.length === 0, updated, failed };
 }
 
+// 단일 행 청구/결재 플래그 토글 — /logs 표 pill 클릭 즉시 저장용.
+export async function toggleLogFlagAction(
+  id: string,
+  field: 'is_invoiced' | 'is_paid',
+  value: boolean,
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('waste_logs')
+    .update({ [field]: value })
+    .eq('id', id);
+  if (error) return { error: error.message };
+  revalidateAllAffectedByLog();
+  return {};
+}
+
 // ========================================
 // 일보 수정 (시나리오 7)
 // 모든 status 의 일보 수정 가능. 마스터 자동 추가 + change_reason 별도 audit

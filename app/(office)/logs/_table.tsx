@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import {
   Trash2,
@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Save,
   RotateCcw,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,7 @@ import {
 import {
   bulkArchiveLogsAction,
   bulkUpdateLogsInlineAction,
+  toggleLogFlagAction,
   type InlineRowUpdate,
   type BulkUpdateResult,
 } from '@/actions/waste-logs';
@@ -117,9 +119,10 @@ function statesEqual(a: RowState | undefined, b: RowState | undefined): boolean 
 
 interface Props {
   rows: LogRow[];
+  sitesByCompany?: Record<string, Array<{ id: string; name: string }>>;
 }
 
-export function LogsTable({ rows }: Props) {
+export function LogsTable({ rows, sitesByCompany = {} }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -303,21 +306,26 @@ export function LogsTable({ rows }: Props) {
               <TableHead className="text-right">운반비</TableHead>
               <TableHead className="text-right">청구금액</TableHead>
               <TableHead>비고</TableHead>
+              <TableHead>문서</TableHead>
               <TableHead>상태</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((row) => {
               const s = edited[row.id] ?? initial[row.id];
+              const sites =
+                row.companies ? sitesByCompany[row.companies.id] ?? [] : [];
               return (
                 <Row
                   key={row.id}
                   row={row}
                   state={s}
+                  sites={sites}
                   isDirty={!statesEqual(s, initial[row.id])}
                   selected={selected.has(row.id)}
                   onToggleSelect={() => toggleOne(row.id)}
                   onChange={(field, value) => updateField(row.id, field, value)}
+                  onFlagChange={(field, value) => updateField(row.id, field, value)}
                 />
               );
             })}
@@ -409,17 +417,21 @@ export function LogsTable({ rows }: Props) {
 function Row({
   row,
   state,
+  sites,
   isDirty,
   selected,
   onToggleSelect,
   onChange,
+  onFlagChange,
 }: {
   row: LogRow;
   state: RowState;
+  sites: Array<{ id: string; name: string }>;
   isDirty: boolean;
   selected: boolean;
   onToggleSelect: () => void;
   onChange: <K extends keyof RowState>(field: K, value: RowState[K]) => void;
+  onFlagChange: (field: 'is_invoiced' | 'is_paid', value: boolean) => void;
 }) {
   const isArchived = row.status === 'archived';
   const calc = calcBilling({
@@ -469,18 +481,12 @@ function Row({
         onClick={(e) => e.stopPropagation()}
       >
         {row.companies ? (
-          (() => {
-            const { from, to } = monthRange(row.log_date);
-            return (
-              <Link
-                href={`/invoices?company=${row.companies.id}&from=${from}&to=${to}`}
-                className="text-foreground hover:underline"
-                title="이 거래처 / 해당 월 거래명세표 발행"
-              >
-                {row.companies.name}
-              </Link>
-            );
-          })()
+          <CompanySiteMenu
+            companyId={row.companies.id}
+            companyName={row.companies.name}
+            logDate={row.log_date}
+            sites={sites}
+          />
         ) : (
           '—'
         )}
@@ -524,22 +530,52 @@ function Row({
         onChange={(v) => onChange('note', v)}
         disabled={isArchived}
       />
-      <TableCell>
-        {wrap(
-          <div className="flex flex-col items-start gap-1">
+      <TableCell onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-col items-start gap-1">
+          <Link
+            href={`/logs/${row.id}/certificate`}
+            className="text-xs text-foreground-secondary hover:text-foreground hover:underline"
+            title="처리확인서 보기"
+          >
+            처리확인서
+          </Link>
+          <Link
+            href={`/logs/${row.id}/weight-cert`}
+            className="text-xs text-foreground-secondary hover:text-foreground hover:underline"
+            title="계량증명서 보기"
+          >
+            계량증명서
+          </Link>
+        </div>
+      </TableCell>
+      <TableCell onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-col items-start gap-1">
+          <Link href={detailHref}>
             <Pill tone={statusTone(row.status)} dot>
               {statusLabelMap[row.status]}
             </Pill>
-            <div className="flex flex-wrap gap-1">
-              <Pill tone={state.is_invoiced ? 'info' : 'danger'}>
-                {state.is_invoiced ? '청구' : '미청구'}
-              </Pill>
-              <Pill tone={state.is_paid ? 'info' : 'danger'}>
-                {state.is_paid ? '결재' : '미결재'}
-              </Pill>
-            </div>
-          </div>,
-        )}
+          </Link>
+          <div className="flex flex-wrap gap-1">
+            <FlagToggle
+              id={row.id}
+              field="is_invoiced"
+              value={state.is_invoiced}
+              onLocalChange={(v) => onFlagChange('is_invoiced', v)}
+              labelOn="청구"
+              labelOff="미청구"
+              disabled={isArchived}
+            />
+            <FlagToggle
+              id={row.id}
+              field="is_paid"
+              value={state.is_paid}
+              onLocalChange={(v) => onFlagChange('is_paid', v)}
+              labelOn="결재"
+              labelOff="미결재"
+              disabled={isArchived}
+            />
+          </div>
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -577,5 +613,132 @@ function CellEditable({
         )}
       />
     </TableCell>
+  );
+}
+
+// 청구/결재 pill 직접 클릭 → 즉시 DB 토글 (저장 바 거치지 않음).
+function FlagToggle({
+  id,
+  field,
+  value,
+  onLocalChange,
+  labelOn,
+  labelOff,
+  disabled = false,
+}: {
+  id: string;
+  field: 'is_invoiced' | 'is_paid';
+  value: boolean;
+  onLocalChange: (v: boolean) => void;
+  labelOn: string;
+  labelOff: string;
+  disabled?: boolean;
+}) {
+  const [pending, startTransition] = useTransition();
+  const handleClick = () => {
+    if (disabled || pending) return;
+    const next = !value;
+    onLocalChange(next); // optimistic
+    startTransition(async () => {
+      const r = await toggleLogFlagAction(id, field, next);
+      if (r.error) {
+        // 실패 시 롤백
+        onLocalChange(value);
+      }
+    });
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={disabled || pending}
+      title={`${labelOn === '청구' ? '청구 상태' : '결재 상태'} 토글`}
+      className={cn(
+        'inline-flex h-[20px] cursor-pointer items-center rounded-full transition-shadow',
+        'hover:ring-2 hover:ring-foreground/20',
+        'focus:outline-none focus:ring-2 focus:ring-foreground/40',
+        (disabled || pending) && 'cursor-not-allowed opacity-60',
+      )}
+    >
+      <Pill tone={value ? 'info' : 'danger'}>{value ? labelOn : labelOff}</Pill>
+    </button>
+  );
+}
+
+// 거래처명 클릭 → 현장 선택 드롭다운. 현장 0 개면 그냥 단일 링크.
+function CompanySiteMenu({
+  companyId,
+  companyName,
+  logDate,
+  sites,
+}: {
+  companyId: string;
+  companyName: string;
+  logDate: string;
+  sites: Array<{ id: string; name: string }>;
+}) {
+  const { from, to } = monthRange(logDate);
+  const baseHref = `/invoices?company=${companyId}&from=${from}&to=${to}`;
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  // 현장 0 개 → 드롭다운 없이 기존 단일 링크
+  if (sites.length === 0) {
+    return (
+      <Link
+        href={baseHref}
+        className="text-foreground hover:underline"
+        title="이 거래처 / 해당 월 거래명세표 발행"
+      >
+        {companyName}
+      </Link>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 text-foreground hover:underline"
+        title="현장별 거래명세표 발행"
+      >
+        {companyName}
+        <ChevronDown className="h-3 w-3 opacity-60" strokeWidth={1.75} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1 min-w-[220px] rounded-md border border-border bg-surface py-1 shadow-lg">
+          <Link
+            href={baseHref}
+            onClick={() => setOpen(false)}
+            className="block px-3 py-1.5 text-xs text-foreground-secondary hover:bg-background-subtle"
+          >
+            전체 현장 (월별)
+          </Link>
+          <div className="my-1 border-t border-border" />
+          {sites.map((s) => (
+            <Link
+              key={s.id}
+              href={`${baseHref}&site=${s.id}`}
+              onClick={() => setOpen(false)}
+              className="block px-3 py-1.5 text-xs text-foreground hover:bg-background-subtle"
+            >
+              {s.name}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

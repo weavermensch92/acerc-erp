@@ -104,6 +104,25 @@ export default async function LogsPage({
   const { data: logs } = await query;
   const rows = (logs ?? []) as unknown as LogRow[];
 
+  // 표에 등장하는 거래처들의 활성 현장 일괄 조회 — 현장별 거래명세표 드롭다운용
+  const companyIds = Array.from(
+    new Set(
+      rows.map((r) => r.companies?.id).filter((id): id is string => !!id),
+    ),
+  );
+  const sitesByCompany: Record<string, Array<{ id: string; name: string }>> = {};
+  if (companyIds.length > 0) {
+    const { data: sites } = await supabase
+      .from('sites')
+      .select('id, name, company_id')
+      .in('company_id', companyIds)
+      .eq('is_active', true)
+      .order('name');
+    for (const s of (sites ?? []) as Array<{ id: string; name: string; company_id: string }>) {
+      (sitesByCompany[s.company_id] ??= []).push({ id: s.id, name: s.name });
+    }
+  }
+
   // 상태별 카운트 (chip 우측 숫자)
   const { data: countsData } = await supabase
     .from('waste_logs')
@@ -478,7 +497,7 @@ export default async function LogsPage({
               </p>
             </div>
           ) : (
-            <LogsTable rows={rows} />
+            <LogsTable rows={rows} sitesByCompany={sitesByCompany} />
           )}
         </div>
       </div>

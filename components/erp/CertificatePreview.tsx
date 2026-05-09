@@ -1,5 +1,8 @@
 import { formatDate, formatKg } from '@/lib/format';
-import type { SelfCompanyInfo } from '@/lib/company-info';
+import {
+  type SelfCompanyInfo,
+  DEFAULT_PROCESSING_METHOD,
+} from '@/lib/company-info';
 
 interface CompanyInfo {
   name: string;
@@ -73,7 +76,7 @@ export function CertificatePreview({
               ['상호', selfCompany.name],
               ['주소', selfCompany.address || '—'],
               ['허가번호', selfCompany.permit_no || '—'],
-              ['처리방법', selfCompany.processing_method || '—'],
+              ['처리방법', selfCompany.processing_method || DEFAULT_PROCESSING_METHOD],
               ['전화번호', selfCompany.phone || '—'],
             ]}
             stampUrl={selfCompany.stamp_url ?? null}
@@ -95,7 +98,17 @@ export function CertificatePreview({
 
         {/* 자사 정보 푸터 */}
         <div className="mt-8 text-center text-xs leading-6">
-          <div className="font-semibold">{selfCompany.name}</div>
+          <div className="inline-flex items-center justify-center gap-3 font-semibold">
+            <span>{selfCompany.name}</span>
+            {selfCompany.stamp_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={selfCompany.stamp_url}
+                alt="날인"
+                className="h-12 w-12 object-contain opacity-90 print:opacity-100"
+              />
+            )}
+          </div>
           {selfCompany.address && <div>{selfCompany.address}</div>}
           {(selfCompany.phone || selfCompany.fax) && (
             <div>

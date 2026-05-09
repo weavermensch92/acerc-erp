@@ -73,7 +73,10 @@ export default async function LogsPage({
   let query = supabase
     .from('waste_logs')
     .select(
-      `id, log_date, direction, vehicle_no, weight_kg, total_amount, status, is_invoiced, is_paid,
+      `id, log_date, direction, vehicle_no,
+       weight_kg, unit_price, transport_fee, billing_type,
+       supply_amount, vat, total_amount,
+       status, is_invoiced, is_paid, note,
        companies(id, name), sites(name), waste_types(name)`,
     )
     .order('log_date', { ascending: false })

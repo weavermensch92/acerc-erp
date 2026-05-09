@@ -37,6 +37,8 @@ interface Props {
   selfCompany: SelfCompanyInfo;
   period: { from: string; to: string };
   logs: InvoiceLog[];
+  // 조회 시 선택된 현장명 (전체 조회면 null) — 공급받는자 박스에 표시
+  siteName?: string | null;
   issuedAt?: Date;
 }
 
@@ -47,6 +49,7 @@ export function InvoicePreview({
   selfCompany,
   period,
   logs,
+  siteName = null,
   issuedAt = new Date(),
 }: Props) {
   const totals = {
@@ -80,14 +83,9 @@ export function InvoicePreview({
             title="공급받는자"
             rows={[
               ['상호', company.name],
-              ['사업자번호', company.business_no ?? '—'],
-              ['주소', company.address ?? '—'],
-              [
-                '담당자',
-                company.contact_name
-                  ? `${company.contact_name}${company.contact_phone ? ` · ${company.contact_phone}` : ''}`
-                  : '—',
-              ],
+              ['담당자', company.contact_name ?? '—'],
+              ['현장명', siteName ?? '—'],
+              ['폰번호', company.contact_phone ?? '—'],
             ]}
           />
           <PartyBox

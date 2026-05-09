@@ -198,6 +198,7 @@ export default async function InvoicesPage({
                     selfCompany={preview.selfCompany}
                     period={preview.period}
                     logs={preview.logs}
+                    siteName={preview.siteName}
                   />
                 </div>
               </>
@@ -207,6 +208,7 @@ export default async function InvoicesPage({
                 selfCompany={preview.selfCompany}
                 period={preview.period}
                 logs={preview.logs as unknown as EditableLog[]}
+                siteName={preview.siteName}
               />
             )}
           </>

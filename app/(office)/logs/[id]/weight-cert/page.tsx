@@ -18,6 +18,7 @@ interface LogDetail {
   weight_tare_kg: number | null;
   weight_kg: number | null;
   companies: { name: string } | null;
+  sites: { name: string | null } | null;
   waste_types: { name: string } | null;
   treatment_plants: { name: string } | null;
   treatment_plant_name_snapshot: string | null;
@@ -35,7 +36,7 @@ export default async function WeightCertPage({
     .from('waste_logs')
     .select(
       `log_date, vehicle_no, weight_total_kg, weight_tare_kg, weight_kg,
-       companies(name), waste_types(name), treatment_plants(name),
+       companies(name), sites(name), waste_types(name), treatment_plants(name),
        treatment_plant_name_snapshot`,
     )
     .eq('id', params.id)
@@ -77,6 +78,7 @@ export default async function WeightCertPage({
                   : null)
               }
               wasteType={detail.waste_types}
+              siteName={detail.sites?.name ?? null}
             />
             <Link href={`/logs/${params.id}`}>
               <Button size="sm" variant="outline">
@@ -106,6 +108,7 @@ export default async function WeightCertPage({
               : null)
           }
           wasteType={detail.waste_types}
+          siteName={detail.sites?.name ?? null}
         />
       </div>
     </>

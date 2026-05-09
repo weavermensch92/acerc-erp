@@ -28,6 +28,7 @@ interface Props {
   selfCompany: SelfCompanyInfo;
   plant: PlantInfo | null;
   wasteType: WasteTypeInfo;
+  siteName?: string | null;
   issuedAt?: Date;
 }
 
@@ -45,6 +46,7 @@ export function WeightCertPreview({
   selfCompany,
   plant,
   wasteType,
+  siteName = null,
   issuedAt = new Date(),
 }: Props) {
   return (
@@ -60,6 +62,7 @@ export function WeightCertPreview({
               selfCompany={selfCompany}
               plant={plant}
               wasteType={wasteType}
+              siteName={siteName}
               issuedAt={issuedAt}
             />
             {i < COPIES.length - 1 && (
@@ -84,6 +87,7 @@ interface CopyProps {
   selfCompany: SelfCompanyInfo;
   plant: PlantInfo | null;
   wasteType: WasteTypeInfo;
+  siteName: string | null;
   issuedAt: Date;
 }
 
@@ -95,6 +99,7 @@ function CopyBlock({
   selfCompany,
   plant,
   wasteType,
+  siteName,
   issuedAt,
 }: CopyProps) {
   return (
@@ -115,6 +120,7 @@ function CopyBlock({
         <Field label="처리자" value={plant?.name ?? '—'} />
         <Field label="성상" value={wasteType.name} />
         <Field label="차량번호" value={log.vehicle_no ?? '—'} mono />
+        <Field label="현장명" value={siteName ?? '—'} />
       </div>
 
       {/* 중량 표 */}
@@ -123,6 +129,11 @@ function CopyBlock({
         <WeightCell label="공차중량" value={log.weight_tare_kg} />
         <WeightCell label="실중량" value={log.weight_kg} primary last />
       </div>
+
+      {/* 증명 문구 */}
+      <p className="mt-2 text-center text-[11px] font-medium text-foreground-muted print:text-gray-700">
+        * 상기와 같이 제품계량을 증명함
+      </p>
 
       {/* 서명 */}
       <div className="mt-3 grid grid-cols-2 gap-3 text-xs">

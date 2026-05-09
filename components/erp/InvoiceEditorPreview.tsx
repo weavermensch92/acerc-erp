@@ -21,6 +21,7 @@ interface Props {
   selfCompany: SelfCompanyInfo;
   period: { from: string; to: string };
   logs: EditableLog[];
+  siteName?: string | null;
 }
 
 const directionRank: Record<string, number> = { in: 0, out: 1 };
@@ -36,7 +37,13 @@ function sortForInvoice(logs: EditableLog[]): EditableLog[] {
   });
 }
 
-export function InvoiceEditorPreview({ company, selfCompany, period, logs }: Props) {
+export function InvoiceEditorPreview({
+  company,
+  selfCompany,
+  period,
+  logs,
+  siteName = null,
+}: Props) {
   // 디폴트: 최근→예전 (log_date desc), 전체 선택
   const [sortKey, setSortKey] = useState<SortKey>('log_date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -88,6 +95,7 @@ export function InvoiceEditorPreview({ company, selfCompany, period, logs }: Pro
               selfCompany,
               period,
               logs: previewLogs as unknown as InvoiceLog[],
+              siteName,
             })
           }
         />
@@ -111,6 +119,7 @@ export function InvoiceEditorPreview({ company, selfCompany, period, logs }: Pro
         selfCompany={selfCompany}
         period={period}
         logs={previewLogs as unknown as InvoiceLog[]}
+        siteName={siteName}
       />
     </div>
   );

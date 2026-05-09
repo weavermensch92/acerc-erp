@@ -306,6 +306,7 @@ export function LogsTable({ rows, sitesByCompany = {} }: Props) {
               <TableHead className="text-right">운반비</TableHead>
               <TableHead className="text-right">청구금액</TableHead>
               <TableHead>비고</TableHead>
+              <TableHead>문서</TableHead>
               <TableHead>상태</TableHead>
             </TableRow>
           </TableHeader>
@@ -529,6 +530,24 @@ function Row({
         onChange={(v) => onChange('note', v)}
         disabled={isArchived}
       />
+      <TableCell onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-col items-start gap-1">
+          <Link
+            href={`/logs/${row.id}/certificate`}
+            className="text-xs text-foreground-secondary hover:text-foreground hover:underline"
+            title="처리확인서 보기"
+          >
+            처리확인서
+          </Link>
+          <Link
+            href={`/logs/${row.id}/weight-cert`}
+            className="text-xs text-foreground-secondary hover:text-foreground hover:underline"
+            title="계량증명서 보기"
+          >
+            계량증명서
+          </Link>
+        </div>
+      </TableCell>
       <TableCell onClick={(e) => e.stopPropagation()}>
         <div className="flex flex-col items-start gap-1">
           <Link href={detailHref}>

@@ -98,7 +98,17 @@ export function CertificatePreview({
 
         {/* 자사 정보 푸터 */}
         <div className="mt-8 text-center text-xs leading-6">
-          <div className="font-semibold">{selfCompany.name}</div>
+          <div className="inline-flex items-center justify-center gap-3 font-semibold">
+            <span>{selfCompany.name}</span>
+            {selfCompany.stamp_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={selfCompany.stamp_url}
+                alt="날인"
+                className="h-12 w-12 object-contain opacity-90 print:opacity-100"
+              />
+            )}
+          </div>
           {selfCompany.address && <div>{selfCompany.address}</div>}
           {(selfCompany.phone || selfCompany.fax) && (
             <div>

@@ -18,6 +18,9 @@ const baseLogShape = {
   unit_price: z.number().int().nonnegative().nullable().optional(),
   transport_fee: z.number().int().nonnegative().default(0),
   billing_type: billingTypeSchema,
+  payment_method: z.string().max(50).optional().nullable(),
+  is_invoiced: z.boolean().optional(),
+  is_paid: z.boolean().optional(),
   note: z.string().max(500).optional().nullable(),
 };
 

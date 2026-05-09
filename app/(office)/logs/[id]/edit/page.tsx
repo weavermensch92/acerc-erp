@@ -56,7 +56,14 @@ export default async function EditLogPage({ params }: { params: { id: string } }
           { label: '수정' },
         ]}
       />
-      <div className="flex-1 overflow-y-auto p-7">
+      <div className="flex-1 overflow-y-auto p-7 space-y-4">
+        <div className="rounded-md border border-info/40 bg-info-bg/40 px-4 py-3 text-[12px] text-info">
+          이 일보(폐기물일보)는 모든 화면의 단일 진실 원천(SSOT) 입니다.
+          수정 시 거래명세표·처리확인서·계량증명서·대시보드·미수금/미지급 정리에 즉시 반영됩니다.
+          <span className="ml-1 text-foreground-muted">
+            (이미 발급되어 다운로드된 PDF/Excel 파일은 발급 시점 스냅샷이라 변경되지 않습니다.)
+          </span>
+        </div>
         <LogForm
           mode="edit"
           logId={params.id}
@@ -81,6 +88,9 @@ export default async function EditLogPage({ params }: { params: { id: string } }
             unit_price: detail.unit_price ?? '',
             transport_fee: detail.transport_fee ?? 0,
             billing_type: detail.billing_type as BillingType,
+            payment_method: detail.payment_method ?? '',
+            is_invoiced: detail.is_invoiced,
+            is_paid: detail.is_paid,
             note: detail.note ?? '',
           }}
         />

@@ -44,6 +44,9 @@ export interface LogFormDefaults {
   unit_price: number | '';
   transport_fee: number | '';
   billing_type: BillingType;
+  payment_method: string;
+  is_invoiced: boolean;
+  is_paid: boolean;
   note: string;
 }
 
@@ -221,6 +224,9 @@ export function LogForm(props: LogFormProps) {
       unit_price: data.unit_price === '' ? null : Number(data.unit_price),
       transport_fee: data.transport_fee === '' ? 0 : Number(data.transport_fee),
       billing_type: data.billing_type,
+      payment_method: data.payment_method?.trim() || null,
+      is_invoiced: !!data.is_invoiced,
+      is_paid: !!data.is_paid,
       note: data.note?.trim() || null,
     };
 
@@ -482,6 +488,67 @@ export function LogForm(props: LogFormProps) {
                 />
               </div>
             </div>
+          </Section>
+
+          <Section title="청구·결제">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="payment_method">결제수단</Label>
+                <Controller
+                  control={control}
+                  name="payment_method"
+                  render={({ field }) => (
+                    <select
+                      id="payment_method"
+                      value={field.value ?? ''}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">— 선택 —</option>
+                      <option value="현금">현금</option>
+                      <option value="계좌이체">계좌이체</option>
+                      <option value="카드">카드</option>
+                      <option value="수표">수표</option>
+                      <option value="어음">어음</option>
+                      <option value="기타">기타</option>
+                    </select>
+                  )}
+                />
+              </div>
+              <Controller
+                control={control}
+                name="is_invoiced"
+                render={({ field }) => (
+                  <label className="flex cursor-pointer items-center gap-2 self-end pb-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!!field.value}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    <span>청구 완료 (반입: 명세표 발급 / 반출: 청구서 수령)</span>
+                  </label>
+                )}
+              />
+              <Controller
+                control={control}
+                name="is_paid"
+                render={({ field }) => (
+                  <label className="flex cursor-pointer items-center gap-2 self-end pb-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!!field.value}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    <span>결제 완료 (반입: 입금 / 반출: 지급)</span>
+                  </label>
+                )}
+              />
+            </div>
+            <p className="text-[11px] text-foreground-muted">
+              이 일보의 청구·결제 상태는 거래명세표·미수금/미지급 화면에 즉시 반영됩니다.
+            </p>
           </Section>
 
           <Section title="비고">

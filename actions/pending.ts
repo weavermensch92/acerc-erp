@@ -56,3 +56,54 @@ export async function markLogsInvoicedAction(
   revalidatePath('/invoices');
   return { ok: true, updated: data?.length ?? 0 };
 }
+
+// ──────────────────────────────────────────
+// 결제(반입 미수금) / 지급(반출 미지급) 일괄 표시
+// ──────────────────────────────────────────
+
+export async function markCompanyPaidAction(
+  companyId: string,
+  direction: Direction,
+  range?: { from?: string; to?: string },
+): Promise<PendingResult> {
+  if (!companyId) return { ok: false, error: 'companyId 누락' };
+  const supabase = createClient();
+
+  let q = supabase
+    .from('waste_logs')
+    .update({ is_paid: true })
+    .eq('company_id', companyId)
+    .eq('direction', direction)
+    .eq('is_paid', false)
+    .eq('status', 'active');
+
+  if (range?.from) q = q.gte('log_date', range.from);
+  if (range?.to) q = q.lte('log_date', range.to);
+
+  const { data, error } = await q.select('id');
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/pending');
+  revalidatePath('/dashboard');
+  revalidatePath(`/companies/${companyId}`);
+  revalidatePath('/invoices');
+  revalidatePath('/payouts');
+  return { ok: true, updated: data?.length ?? 0 };
+}
+
+export async function markLogsPaidAction(
+  ids: string[],
+): Promise<PendingResult> {
+  if (ids.length === 0) return { ok: true, updated: 0 };
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('waste_logs')
+    .update({ is_paid: true })
+    .in('id', ids)
+    .select('id');
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/pending');
+  revalidatePath('/dashboard');
+  revalidatePath('/invoices');
+  revalidatePath('/payouts');
+  return { ok: true, updated: data?.length ?? 0 };
+}

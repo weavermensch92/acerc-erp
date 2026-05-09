@@ -17,35 +17,31 @@ interface LogDetail {
   weight_kg: number | null;
   companies: {
     name: string;
-    business_no: string | null;
+    representative: string | null;
     address: string | null;
-    contact_name: string | null;
-    contact_phone: string | null;
+  } | null;
+  sites: {
+    name: string | null;
+    address: string | null;
   } | null;
   waste_types: { name: string } | null;
-  treatment_plants: { name: string; address: string | null } | null;
-  treatment_plant_name_snapshot: string | null;
 }
 
 export default async function CertificatePage({
   params,
-  searchParams,
 }: {
   params: { id: string };
-  searchParams: { selfAsProcessor?: string };
 }) {
   const supabase = createClient();
   const selfCompany = await getSelfCompanyInfo(supabase);
-  const selfAsProcessor = searchParams.selfAsProcessor === '1';
 
   const { data } = await supabase
     .from('waste_logs')
     .select(
       `log_date, vehicle_no, weight_kg,
-       companies(name, business_no, address, contact_name, contact_phone),
-       waste_types(name),
-       treatment_plants(name, address),
-       treatment_plant_name_snapshot`,
+       companies(name, representative, address),
+       sites(name, address),
+       waste_types(name)`,
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -79,15 +75,9 @@ export default async function CertificatePage({
                 weight_kg: detail.weight_kg,
               }}
               company={detail.companies}
+              site={detail.sites}
               selfCompany={selfCompany}
-              plant={
-                detail.treatment_plants ??
-                (detail.treatment_plant_name_snapshot
-                  ? { name: detail.treatment_plant_name_snapshot, address: null }
-                  : null)
-              }
               wasteType={detail.waste_types}
-              selfAsProcessor={selfAsProcessor}
             />
             <Link href={`/logs/${params.id}`}>
               <Button size="sm" variant="outline">
@@ -99,20 +89,6 @@ export default async function CertificatePage({
         }
       />
       <div className="flex-1 overflow-y-auto p-7 print:p-0">
-        {selfCompany.stamp_url && (
-          <div className="mb-4 flex items-center justify-end gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs print:hidden">
-            <span className="text-foreground-muted">처리자에도 자사 도장 적용:</span>
-            <Link
-              href={`?selfAsProcessor=${selfAsProcessor ? '0' : '1'}`}
-              className="rounded-full border border-border px-3 py-1 font-medium hover:bg-background-subtle"
-            >
-              {selfAsProcessor ? '✓ 적용 중 (해제)' : '적용하기'}
-            </Link>
-            <span className="text-[10.5px] text-foreground-muted">
-              자사가 처리장 역할도 하는 경우만 사용
-            </span>
-          </div>
-        )}
         <CertificatePreview
           serial={params.id.slice(0, 8).toUpperCase()}
           log={{
@@ -121,15 +97,9 @@ export default async function CertificatePage({
             weight_kg: detail.weight_kg,
           }}
           company={detail.companies}
+          site={detail.sites}
           selfCompany={selfCompany}
-          plant={
-            detail.treatment_plants ??
-            (detail.treatment_plant_name_snapshot
-              ? { name: detail.treatment_plant_name_snapshot, address: null }
-              : null)
-          }
           wasteType={detail.waste_types}
-          selfAsProcessor={selfAsProcessor}
         />
       </div>
     </>

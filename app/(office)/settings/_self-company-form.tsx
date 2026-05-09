@@ -44,6 +44,8 @@ export function SelfCompanyForm({ initial }: Props) {
       email: data.email?.trim() || null,
       business_type: data.business_type?.trim() || null,
       business_item: data.business_item?.trim() || null,
+      permit_no: data.permit_no?.trim() || null,
+      processing_method: data.processing_method?.trim() || null,
       stamp_url: stampUrl,
       stamp_path: stampPath,
     };
@@ -146,6 +148,25 @@ export function SelfCompanyForm({ initial }: Props) {
           {...register('email')}
           placeholder="example@acerc.kr"
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="sc-permit">허가번호 (처리확인서)</Label>
+          <Input
+            id="sc-permit"
+            {...register('permit_no')}
+            placeholder="예: 제 2024-12-3456 호"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="sc-method">처리방법 (처리확인서)</Label>
+          <Input
+            id="sc-method"
+            {...register('processing_method')}
+            placeholder="예: 재활용 / 소각 / 매립"
+          />
+        </div>
       </div>
 
       <div className="space-y-2 rounded-md border border-border bg-background-subtle/40 p-3">

@@ -46,6 +46,9 @@ export async function createCompanyInline(
     .single();
 
   if (error || !data) {
+    if (error?.code === '23505') {
+      return { ok: false, error: '같은 이름의 거래처가 이미 등록되어 있습니다.' };
+    }
     return { ok: false, error: error?.message ?? '저장 실패' };
   }
   return {
@@ -95,6 +98,9 @@ export async function createCompanyAction(input: CompanyInput): Promise<CompanyA
     .select('id')
     .single();
   if (error || !data) {
+    if (error?.code === '23505') {
+      return { ok: false, error: '같은 이름의 거래처가 이미 등록되어 있습니다.' };
+    }
     return { ok: false, error: error?.message ?? '등록 실패' };
   }
   revalidatePath('/companies');
@@ -114,7 +120,12 @@ export async function updateCompanyAction(
     .from('companies')
     .update(parsed.data)
     .eq('id', id);
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    if (error.code === '23505') {
+      return { ok: false, error: '같은 이름의 거래처가 이미 등록되어 있습니다.' };
+    }
+    return { ok: false, error: error.message };
+  }
   revalidatePath('/companies');
   revalidatePath(`/companies/${id}`);
   return { ok: true, companyId: id };

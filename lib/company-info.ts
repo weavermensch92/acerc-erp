@@ -21,6 +21,9 @@ export const selfCompanySchema = z.object({
 
 export type SelfCompanyInfo = z.infer<typeof selfCompanySchema>;
 
+// 처리확인서·거래명세표 처리방법 행 디폴트 — 자사 정보 미입력 시 사용.
+export const DEFAULT_PROCESSING_METHOD = '중간가공폐기물제조(재)위탁';
+
 // 초기값 — DB 에 저장된 값 없을 때 사용
 export const DEFAULT_SELF_COMPANY: SelfCompanyInfo = {
   name: '(주)에이스알앤씨',
@@ -33,7 +36,7 @@ export const DEFAULT_SELF_COMPANY: SelfCompanyInfo = {
   business_type: '폐기물 수집운반·처리업',
   business_item: '폐기물 처리',
   permit_no: '',
-  processing_method: '',
+  processing_method: DEFAULT_PROCESSING_METHOD,
   stamp_url: null,
   stamp_path: null,
 };

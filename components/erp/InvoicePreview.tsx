@@ -1,5 +1,8 @@
 import { formatKRW, formatKg, formatDate, formatNumber } from '@/lib/format';
-import type { SelfCompanyInfo } from '@/lib/company-info';
+import {
+  type SelfCompanyInfo,
+  DEFAULT_PROCESSING_METHOD,
+} from '@/lib/company-info';
 import type { Direction } from '@/lib/types/database';
 
 export interface InvoiceLog {
@@ -96,6 +99,8 @@ export function InvoicePreview({
               ['사업자번호', selfCompany.business_no || '— (설정에서 입력)'],
               ['대표자', selfCompany.representative || '—'],
               ['주소', selfCompany.address || '—'],
+              ['허가번호', selfCompany.permit_no || '—'],
+              ['처리방법', selfCompany.processing_method || DEFAULT_PROCESSING_METHOD],
               ['업태', selfCompany.business_type || '—'],
               ['종목', selfCompany.business_item || '—'],
             ]}

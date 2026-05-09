@@ -331,11 +331,11 @@ function Row({
               {statusLabelMap[row.status]}
             </Pill>
             <div className="flex flex-wrap gap-1">
-              <Pill tone={row.is_invoiced ? 'info' : 'neutral'}>
+              <Pill tone={row.is_invoiced ? 'info' : 'danger'}>
                 {row.is_invoiced ? '청구' : '미청구'}
               </Pill>
-              <Pill tone={row.is_paid ? 'success' : 'warning'}>
-                {row.is_paid ? '결제' : '미결제'}
+              <Pill tone={row.is_paid ? 'info' : 'danger'}>
+                {row.is_paid ? '결재' : '미결재'}
               </Pill>
             </div>
           </div>,

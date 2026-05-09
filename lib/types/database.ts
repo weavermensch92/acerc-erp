@@ -13,6 +13,10 @@ export interface Company {
   address: string | null;
   contact_name: string | null;
   contact_phone: string | null;
+  representative: string | null;
+  business_type: string | null;
+  business_item: string | null;
+  email: string | null;
   share_token: string | null;
   default_unit_price: number | null;
   is_internal: boolean;

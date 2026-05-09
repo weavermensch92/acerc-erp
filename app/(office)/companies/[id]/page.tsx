@@ -113,6 +113,10 @@ export default async function CompanyDetailPage({
                 address: company.address ?? '',
                 contact_name: company.contact_name ?? '',
                 contact_phone: company.contact_phone ?? '',
+                representative: company.representative ?? '',
+                business_type: company.business_type ?? '',
+                business_item: company.business_item ?? '',
+                email: company.email ?? '',
                 default_unit_price: company.default_unit_price ?? '',
                 is_internal: company.is_internal,
               }}

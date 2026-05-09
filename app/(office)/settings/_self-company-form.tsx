@@ -41,6 +41,7 @@ export function SelfCompanyForm({ initial }: Props) {
       address: data.address?.trim() || null,
       phone: data.phone?.trim() || null,
       fax: data.fax?.trim() || null,
+      email: data.email?.trim() || null,
       business_type: data.business_type?.trim() || null,
       business_item: data.business_item?.trim() || null,
       stamp_url: stampUrl,
@@ -135,6 +136,16 @@ export function SelfCompanyForm({ initial }: Props) {
           <Label htmlFor="sc-bi">종목</Label>
           <Input id="sc-bi" {...register('business_item')} />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="sc-email">이메일 (홈택스 세금계산서 발행자 이메일)</Label>
+        <Input
+          id="sc-email"
+          type="email"
+          {...register('email')}
+          placeholder="example@acerc.kr"
+        />
       </div>
 
       <div className="space-y-2 rounded-md border border-border bg-background-subtle/40 p-3">

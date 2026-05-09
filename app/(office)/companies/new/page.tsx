@@ -24,6 +24,10 @@ export default function NewCompanyPage() {
               address: '',
               contact_name: '',
               contact_phone: '',
+              representative: '',
+              business_type: '',
+              business_item: '',
+              email: '',
               default_unit_price: '',
               is_internal: false,
             }}

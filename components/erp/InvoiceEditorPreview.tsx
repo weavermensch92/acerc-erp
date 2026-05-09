@@ -12,6 +12,7 @@ import {
   type InvoiceCompanyInfo,
 } from '@/components/erp/InvoicePreview';
 import { ExcelButton } from '@/components/erp/ExcelButton';
+import { HometaxExcelButton } from '@/components/erp/HometaxExcelButton';
 import { downloadInvoiceExcel } from '@/lib/excel/invoice';
 import type { SelfCompanyInfo } from '@/lib/company-info';
 
@@ -70,7 +71,15 @@ export function InvoiceEditorPreview({ company, selfCompany, period, logs }: Pro
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end print:hidden">
+      <div className="flex justify-end gap-2 print:hidden">
+        <HometaxExcelButton
+          base={{
+            company,
+            selfCompany,
+            period,
+            logs: previewLogs as unknown as InvoiceLog[],
+          }}
+        />
         <ExcelButton
           label="엑셀 저장"
           onExport={() =>

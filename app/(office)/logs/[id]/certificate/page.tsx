@@ -39,7 +39,7 @@ export default async function CertificatePage({
     .from('waste_logs')
     .select(
       `log_date, vehicle_no, weight_kg,
-       companies(name, representative, address),
+       companies(*),
        sites(name, address),
        waste_types(name)`,
     )

@@ -35,6 +35,18 @@ function statusTone(status: LogStatus): 'neutral' | 'warning' | 'success' {
   return 'neutral';
 }
 
+// 일보 일자가 속한 달의 시작/끝 (YYYY-MM-DD) — 거래명세표 링크용
+function monthRange(logDate: string): { from: string; to: string } {
+  const d = new Date(logDate);
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const fmt = (date: Date) => date.toISOString().slice(0, 10);
+  return {
+    from: fmt(new Date(y, m, 1)),
+    to: fmt(new Date(y, m + 1, 0)),
+  };
+}
+
 export interface LogRow {
   id: string;
   log_date: string;
@@ -45,7 +57,7 @@ export interface LogRow {
   status: LogStatus;
   is_invoiced: boolean;
   is_paid: boolean;
-  companies: { name: string } | null;
+  companies: { id: string; name: string } | null;
   sites: { name: string } | null;
   waste_types: { name: string } | null;
 }
@@ -279,7 +291,27 @@ function Row({
           </Pill>,
         )}
       </TableCell>
-      <TableCell className="font-medium">{wrap(row.companies?.name ?? '—')}</TableCell>
+      <TableCell
+        className="font-medium"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {row.companies ? (
+          (() => {
+            const { from, to } = monthRange(row.log_date);
+            return (
+              <Link
+                href={`/invoices?company=${row.companies.id}&from=${from}&to=${to}`}
+                className="text-foreground hover:underline"
+                title="이 거래처 / 해당 월 거래명세표 발행"
+              >
+                {row.companies.name}
+              </Link>
+            );
+          })()
+        ) : (
+          '—'
+        )}
+      </TableCell>
       <TableCell className="text-foreground-secondary">
         {wrap(row.sites?.name ?? '—')}
       </TableCell>
@@ -294,9 +326,19 @@ function Row({
       </TableCell>
       <TableCell>
         {wrap(
-          <Pill tone={statusTone(row.status)} dot>
-            {statusLabelMap[row.status]}
-          </Pill>,
+          <div className="flex flex-col items-start gap-1">
+            <Pill tone={statusTone(row.status)} dot>
+              {statusLabelMap[row.status]}
+            </Pill>
+            <div className="flex flex-wrap gap-1">
+              <Pill tone={row.is_invoiced ? 'info' : 'neutral'}>
+                {row.is_invoiced ? '청구' : '미청구'}
+              </Pill>
+              <Pill tone={row.is_paid ? 'success' : 'warning'}>
+                {row.is_paid ? '결제' : '미결제'}
+              </Pill>
+            </div>
+          </div>,
         )}
       </TableCell>
     </TableRow>

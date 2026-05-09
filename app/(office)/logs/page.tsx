@@ -74,7 +74,7 @@ export default async function LogsPage({
     .from('waste_logs')
     .select(
       `id, log_date, direction, vehicle_no, weight_kg, total_amount, status, is_invoiced, is_paid,
-       companies(name), sites(name), waste_types(name)`,
+       companies(id, name), sites(name), waste_types(name)`,
     )
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: false })

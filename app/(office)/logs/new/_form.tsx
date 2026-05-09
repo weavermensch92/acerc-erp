@@ -32,6 +32,9 @@ export function NewLogForm({ wasteTypes, treatmentPlants, allSites, initialDate 
         unit_price: '',
         transport_fee: 0,
         billing_type: 'weight_based',
+        payment_method: '',
+        is_invoiced: false,
+        is_paid: false,
         note: '',
       }}
     />

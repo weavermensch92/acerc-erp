@@ -17,6 +17,18 @@ export interface ActionResult {
   error?: string;
 }
 
+// 폐기물일보(waste_logs) 가 모든 화면의 SSOT — 변경 시 모든 의존 페이지 캐시 무효화.
+// id 가 있으면 해당 일보 상세도 같이 revalidate.
+function revalidateAllAffectedByLog(id?: string) {
+  revalidatePath('/logs');
+  if (id) revalidatePath(`/logs/${id}`);
+  revalidatePath('/dashboard');
+  revalidatePath('/invoices');
+  revalidatePath('/payouts');
+  revalidatePath('/pending');
+  revalidatePath('/snapshots');
+}
+
 // ========================================
 // 마스터 lookup-or-create 헬퍼
 // ========================================
@@ -189,8 +201,7 @@ export async function createLogAction(input: WasteLogCreateInput): Promise<Actio
   // 차량번호 + 공차 기억 (다음 입력 시 자동 채움)
   await rememberVehicleTare(supabase, data.vehicle_no, data.weight_tare_kg);
 
-  revalidatePath('/logs');
-  revalidatePath('/dashboard');
+  revalidateAllAffectedByLog(created.id);
   redirect(`/logs/${created.id}`);
 }
 
@@ -236,8 +247,7 @@ export async function bulkArchiveLogsAction(
     );
   }
 
-  revalidatePath('/logs');
-  revalidatePath('/dashboard');
+  revalidateAllAffectedByLog();
   return { ok: true, archived: archivedCount };
 }
 
@@ -260,9 +270,7 @@ export async function restoreLogAction(id: string): Promise<ActionResult> {
     change_reason: '보관 → 정식 복원',
   });
 
-  revalidatePath('/logs');
-  revalidatePath('/dashboard');
-  revalidatePath(`/logs/${id}`);
+  revalidateAllAffectedByLog(id);
   return {};
 }
 
@@ -340,10 +348,7 @@ export async function bulkUpdateLogsInlineAction(
     );
   }
 
-  revalidatePath('/logs');
-  revalidatePath('/dashboard');
-  revalidatePath('/invoices');
-  revalidatePath('/payouts');
+  revalidateAllAffectedByLog();
 
   return { ok: failed.length === 0, updated, failed };
 }
@@ -381,30 +386,39 @@ export async function updateLogAction(
     return { error: e instanceof Error ? e.message : '마스터 등록 실패' };
   }
 
-  const { error } = await supabase
-    .from('waste_logs')
-    .update({
-      log_date: data.log_date,
-      direction: data.direction,
-      company_id: data.company_id,
-      site_id: siteId,
-      waste_type_id: wasteTypeId,
-      treatment_plant_id: treatmentPlantId,
-      // 새로 처리장이 매칭/생성되면 snapshot은 비움 (FK 가 정상이면 fallback 불필요)
-      treatment_plant_name_snapshot: treatmentPlantId ? null : undefined,
-      vehicle_no: data.vehicle_no ?? null,
-      weight_total_kg: data.weight_total_kg ?? null,
-      weight_tare_kg: data.weight_tare_kg ?? null,
-      weight_kg: data.weight_kg ?? null,
-      unit_price: data.unit_price ?? null,
-      transport_fee: data.transport_fee ?? 0,
-      billing_type: data.billing_type,
-      supply_amount: calc.supplyAmount,
-      vat: calc.vat,
-      total_amount: calc.totalAmount,
-      note: data.note ?? null,
-    })
-    .eq('id', id);
+  const updatePayload: Record<string, unknown> = {
+    log_date: data.log_date,
+    direction: data.direction,
+    company_id: data.company_id,
+    site_id: siteId,
+    waste_type_id: wasteTypeId,
+    treatment_plant_id: treatmentPlantId,
+    // 새로 처리장이 매칭/생성되면 snapshot은 비움 (FK 가 정상이면 fallback 불필요)
+    treatment_plant_name_snapshot: treatmentPlantId ? null : undefined,
+    vehicle_no: data.vehicle_no ?? null,
+    weight_total_kg: data.weight_total_kg ?? null,
+    weight_tare_kg: data.weight_tare_kg ?? null,
+    weight_kg: data.weight_kg ?? null,
+    unit_price: data.unit_price ?? null,
+    transport_fee: data.transport_fee ?? 0,
+    billing_type: data.billing_type,
+    supply_amount: calc.supplyAmount,
+    vat: calc.vat,
+    total_amount: calc.totalAmount,
+    note: data.note ?? null,
+  };
+  // 결제수단 / 청구·결제 플래그 — 폼에서 입력한 경우만 반영 (undefined 면 유지)
+  if (data.payment_method !== undefined) {
+    updatePayload.payment_method = data.payment_method ?? null;
+  }
+  if (data.is_invoiced !== undefined) {
+    updatePayload.is_invoiced = data.is_invoiced;
+  }
+  if (data.is_paid !== undefined) {
+    updatePayload.is_paid = data.is_paid;
+  }
+
+  const { error } = await supabase.from('waste_logs').update(updatePayload).eq('id', id);
 
   if (error) return { error: error.message };
 
@@ -422,9 +436,7 @@ export async function updateLogAction(
     });
   }
 
-  revalidatePath('/logs');
-  revalidatePath('/dashboard');
-  revalidatePath(`/logs/${id}`);
+  revalidateAllAffectedByLog(id);
   redirect(`/logs/${id}`);
 }
 
@@ -450,9 +462,7 @@ export async function approveLogAction(id: string): Promise<ActionResult> {
   if (error) return { error: error.message };
   if ((count ?? 0) === 0) return { error: '검토 대기 상태가 아닙니다' };
 
-  revalidatePath('/logs');
-  revalidatePath('/dashboard');
-  revalidatePath(`/logs/${id}`);
+  revalidateAllAffectedByLog(id);
 
   const { data: nextPending } = await supabase
     .from('waste_logs')
@@ -500,9 +510,7 @@ export async function rejectLogAction(id: string, reason: string): Promise<Actio
     change_reason: `반려: ${trimmedReason}`,
   });
 
-  revalidatePath('/logs');
-  revalidatePath('/dashboard');
-  revalidatePath(`/logs/${id}`);
+  revalidateAllAffectedByLog(id);
 
   const { data: nextPending } = await supabase
     .from('waste_logs')

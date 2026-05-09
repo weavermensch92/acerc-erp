@@ -30,6 +30,9 @@ interface PeriodRange {
   days: number;
 }
 
+// 직전 기간 범위가 너무 멀리 거슬러 가지 않도록 cap (전체기간 모드에서 1700년대 등 비정상 값 방지)
+const MAX_PREV_LOOKBACK_DAYS = 366;
+
 function parsePeriod(searchParams: { from?: string; to?: string }): PeriodRange {
   const today = new Date();
   const isoRe = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,9 +51,10 @@ function parsePeriod(searchParams: { from?: string; to?: string }): PeriodRange 
   if (to < from) [from, to] = [to, from];
 
   const days = differenceInCalendarDays(to, from) + 1;
-  // 직전 동일 길이 기간
+  // 직전 동일 길이 기간 — 단, 너무 긴 기간은 비교 의미가 없으므로 최대 N 일로 cap
   const prevTo = subDays(from, 1);
-  const prevFrom = subDays(prevTo, days - 1);
+  const prevSpan = Math.min(days, MAX_PREV_LOOKBACK_DAYS);
+  const prevFrom = subDays(prevTo, prevSpan - 1);
 
   const sameDay = days === 1;
   const label = sameDay

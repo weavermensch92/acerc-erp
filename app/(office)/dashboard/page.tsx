@@ -139,11 +139,14 @@ function buildTop5(rows: Row[], dir: Direction): CompanyRanking[] {
     .slice(0, 5);
 }
 
+// 일별 차트용 — 너무 긴 기간(예: '전체 기간' 1900~2099) 은 메모리 폭발 방지를 위해 스킵.
+const MAX_DAILY_BUCKETS = 366;
 function enumerateDays(fromStr: string, toStr: string): string[] {
   const result: string[] = [];
   const start = parseISO(fromStr);
   const end = parseISO(toStr);
-  for (let d = start; d <= end; d = addDays(d, 1)) {
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return result;
+  for (let d = start, i = 0; d <= end && i < MAX_DAILY_BUCKETS; d = addDays(d, 1), i++) {
     result.push(fmt(d));
   }
   return result;
@@ -211,23 +214,27 @@ export default async function DashboardPage({
   const prevOutStats = aggregate(prevRows, 'out');
 
   type DayRow = { log_date: string; direction: Direction; weight_kg: number | null };
+  const chartTooLong = period.days > MAX_DAILY_BUCKETS;
   const chartRows = (chartData ?? []) as DayRow[];
   const dayMap = new Map<string, { inKg: number; outKg: number }>();
-  for (const d of enumerateDays(period.from, period.to)) {
-    dayMap.set(d, { inKg: 0, outKg: 0 });
+  let buckets: DailyBucket[] = [];
+  if (!chartTooLong) {
+    for (const d of enumerateDays(period.from, period.to)) {
+      dayMap.set(d, { inKg: 0, outKg: 0 });
+    }
+    for (const r of chartRows) {
+      const bucket = dayMap.get(r.log_date);
+      if (!bucket) continue;
+      const w = Number(r.weight_kg ?? 0);
+      if (r.direction === 'in') bucket.inKg += w;
+      else bucket.outKg += w;
+    }
+    buckets = enumerateDays(period.from, period.to).map((date) => ({
+      date,
+      inKg: dayMap.get(date)!.inKg,
+      outKg: dayMap.get(date)!.outKg,
+    }));
   }
-  for (const r of chartRows) {
-    const bucket = dayMap.get(r.log_date);
-    if (!bucket) continue;
-    const w = Number(r.weight_kg ?? 0);
-    if (r.direction === 'in') bucket.inKg += w;
-    else bucket.outKg += w;
-  }
-  const buckets: DailyBucket[] = enumerateDays(period.from, period.to).map((date) => ({
-    date,
-    inKg: dayMap.get(date)!.inKg,
-    outKg: dayMap.get(date)!.outKg,
-  }));
 
   const topInCompanies = buildTop5(thisRows, 'in');
   const topOutCompanies = buildTop5(thisRows, 'out');
@@ -358,10 +365,18 @@ export default async function DashboardPage({
         {/* 차트 + Top5 */}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_320px]">
           <div className="rounded-[10px] border border-border bg-surface p-5 shadow-sm">
-            <InOutChart
-              buckets={buckets}
-              title={`${period.label} 일별 반입·반출`}
-            />
+            {chartTooLong ? (
+              <div className="flex h-40 items-center justify-center text-center text-[12px] text-foreground-muted">
+                선택 기간이 너무 길어 일별 차트를 생략합니다 ({period.days}일).
+                <br />
+                기간을 366일 이하로 좁히면 차트가 표시됩니다.
+              </div>
+            ) : (
+              <InOutChart
+                buckets={buckets}
+                title={`${period.label} 일별 반입·반출`}
+              />
+            )}
           </div>
           <div className="space-y-3">
             <TopCompaniesCard items={topInCompanies} title="매출 Top 5 (반입)" />

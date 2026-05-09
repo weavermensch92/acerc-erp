@@ -84,7 +84,8 @@ export function InvoicePreview({
             rows={[
               ['상호', company.name],
               ['담당자', company.contact_name ?? '—'],
-              ['현장명', siteName ?? '—'],
+              // 현장명은 조회 시 특정 현장을 골랐을 때만 노출 (헷갈림 방지)
+              ...(siteName ? ([['현장명', siteName]] as Array<[string, string]>) : []),
               ['폰번호', company.contact_phone ?? '—'],
             ]}
           />

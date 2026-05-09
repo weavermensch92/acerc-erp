@@ -39,7 +39,11 @@ const statusFiltersWithoutReview: Array<{
   { id: 'archived', label: '보관(삭제)', value: 'archived' },
 ];
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+// 한국 시간(Asia/Seoul) 기준 오늘 — 서버가 UTC 일 때도 일관.
+const todayIso = () => {
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' });
+  return fmt.format(new Date()); // 'YYYY-MM-DD'
+};
 
 function isValidDate(s?: string): boolean {
   return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);

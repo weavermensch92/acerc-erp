@@ -17,8 +17,12 @@ import { formatKRW, formatKg, formatDate, formatNumber } from '@/lib/format';
 import {
   markCompanyInvoicedAction,
   markLogsInvoicedAction,
+  markCompanyPaidAction,
+  markLogsPaidAction,
 } from '@/actions/pending';
 import type { Direction } from '@/lib/types/database';
+
+export type Kind = 'invoice' | 'payment';
 
 export interface PendingLogRow {
   id: string;
@@ -27,6 +31,7 @@ export interface PendingLogRow {
   total_amount: number | null;
   vehicle_no: string | null;
   is_paid: boolean;
+  is_invoiced: boolean;
   site_name: string | null;
   waste_type_name: string | null;
 }
@@ -44,14 +49,22 @@ export interface CompanyGroup {
 
 interface Props {
   direction: Direction;
+  kind: Kind;
   groups: CompanyGroup[];
   period: { from: string; to: string };
 }
 
-export function PendingClient({ direction, groups, period }: Props) {
+export function PendingClient({ direction, kind, groups, period }: Props) {
   const router = useRouter();
   const isInbound = direction === 'in';
-  const processLabel = isInbound ? '청구 완료 표시' : '청구서 수령 표시';
+  const isPayment = kind === 'payment';
+  const processLabel = isPayment
+    ? isInbound
+      ? '입금 완료 표시'
+      : '지급 완료 표시'
+    : isInbound
+      ? '청구 완료 표시'
+      : '청구서 수령 표시';
   const linkLabel = isInbound ? '명세표 발급으로' : '지급 화면으로';
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -86,8 +99,9 @@ export function PendingClient({ direction, groups, period }: Props) {
   const onProcessGroup = (g: CompanyGroup) => {
     setError(null);
     setPendingId(g.companyId);
+    const fn = isPayment ? markCompanyPaidAction : markCompanyInvoicedAction;
     startTransition(async () => {
-      const r = await markCompanyInvoicedAction(g.companyId, direction, {
+      const r = await fn(g.companyId, direction, {
         from: g.oldestDate,
         to: g.latestDate,
       });
@@ -182,6 +196,7 @@ export function PendingClient({ direction, groups, period }: Props) {
               <LogsTable
                 logs={g.logs}
                 direction={direction}
+                kind={kind}
                 onAfterUpdate={() => router.refresh()}
               />
             )}
@@ -195,10 +210,12 @@ export function PendingClient({ direction, groups, period }: Props) {
 function LogsTable({
   logs,
   direction,
+  kind,
   onAfterUpdate,
 }: {
   logs: PendingLogRow[];
   direction: Direction;
+  kind: Kind;
   onAfterUpdate: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -207,6 +224,14 @@ function LogsTable({
   const allSelected = logs.length > 0 && logs.every((l) => selected.has(l.id));
 
   const isInbound = direction === 'in';
+  const isPayment = kind === 'payment';
+  const applyLabel = isPayment
+    ? isInbound
+      ? '입금 완료 표시'
+      : '지급 완료 표시'
+    : isInbound
+      ? '청구 완료 표시'
+      : '청구서 수령 표시';
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -223,8 +248,9 @@ function LogsTable({
   const onApply = () => {
     if (selected.size === 0) return;
     setError(null);
+    const fn = isPayment ? markLogsPaidAction : markLogsInvoicedAction;
     startTransition(async () => {
-      const r = await markLogsInvoicedAction([...selected]);
+      const r = await fn([...selected]);
       if (!r.ok) {
         setError(r.error ?? '처리 실패');
         return;
@@ -327,7 +353,7 @@ function LogsTable({
             ) : (
               <CheckCircle2 className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
             )}
-            선택 {isInbound ? '청구 완료 표시' : '청구서 수령 표시'}
+            선택 {applyLabel}
           </Button>
         </div>
       )}

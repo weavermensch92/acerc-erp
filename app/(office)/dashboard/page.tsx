@@ -297,14 +297,15 @@ export default async function DashboardPage({
               hint="명세표 미발급 — 클릭 시 처리"
               tone={inStats.uninvoiced > 0 ? 'warning' : 'neutral'}
               delta={calcDelta(inStats.uninvoiced, prevInStats.uninvoiced)}
-              href={`/pending?type=in&from=${period.from}&to=${period.to}`}
+              href={`/pending?type=in&kind=invoice&from=${period.from}&to=${period.to}`}
             />
             <StatCard
               label="미수금"
               value={formatKRW(inStats.unpaidAmount)}
-              hint={`${inStats.unpaid}건 미입금`}
+              hint={`${inStats.unpaid}건 미입금 — 클릭 시 처리`}
               tone={inStats.unpaid > 0 ? 'danger' : 'neutral'}
               delta={calcDelta(inStats.unpaidAmount, prevInStats.unpaidAmount)}
+              href={`/pending?type=in&kind=payment&from=${period.from}&to=${period.to}`}
             />
           </div>
         </section>
@@ -341,14 +342,15 @@ export default async function DashboardPage({
               hint="청구서 미수령 — 클릭 시 처리"
               tone={outStats.uninvoiced > 0 ? 'warning' : 'neutral'}
               delta={calcDelta(outStats.uninvoiced, prevOutStats.uninvoiced)}
-              href={`/pending?type=out&from=${period.from}&to=${period.to}`}
+              href={`/pending?type=out&kind=invoice&from=${period.from}&to=${period.to}`}
             />
             <StatCard
               label="미지급"
               value={formatKRW(outStats.unpaidAmount)}
-              hint={`${outStats.unpaid}건 미지급`}
+              hint={`${outStats.unpaid}건 미지급 — 클릭 시 처리`}
               tone={outStats.unpaid > 0 ? 'danger' : 'neutral'}
               delta={calcDelta(outStats.unpaidAmount, prevOutStats.unpaidAmount)}
+              href={`/pending?type=out&kind=payment&from=${period.from}&to=${period.to}`}
             />
           </div>
         </section>

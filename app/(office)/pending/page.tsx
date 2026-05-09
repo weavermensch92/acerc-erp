@@ -5,12 +5,13 @@ import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/server';
 import { format, subDays } from 'date-fns';
 import type { Direction } from '@/lib/types/database';
-import { PendingClient, type CompanyGroup } from './_client';
+import { PendingClient, type CompanyGroup, type Kind } from './_client';
 
 export const dynamic = 'force-dynamic';
 
 interface SearchParams {
   type?: string;
+  kind?: string;
   from?: string;
   to?: string;
 }
@@ -28,6 +29,39 @@ function resolvePeriod(sp: SearchParams) {
   return { from: fmt(subDays(today, 90)), to: fmt(today) };
 }
 
+interface ModeMeta {
+  title: string;
+  subtitle: string;
+  filterField: 'is_invoiced' | 'is_paid';
+}
+
+function modeMeta(kind: Kind, direction: Direction): ModeMeta {
+  if (kind === 'invoice') {
+    return direction === 'in'
+      ? {
+          title: '미청구 처리',
+          subtitle: '반입(매출) — 거래명세표 미발급된 거래처 / 일보 처리',
+          filterField: 'is_invoiced',
+        }
+      : {
+          title: '미정산 처리',
+          subtitle: '반출(매입) — 청구서 미수령된 처리 거래 처리',
+          filterField: 'is_invoiced',
+        };
+  }
+  return direction === 'in'
+    ? {
+        title: '미수금 처리',
+        subtitle: '반입(매출) — 입금 미완료 거래처 / 일보 정리',
+        filterField: 'is_paid',
+      }
+    : {
+        title: '미지급 처리',
+        subtitle: '반출(매입) — 처리장 지급 미완료 정리',
+        filterField: 'is_paid',
+      };
+}
+
 export default async function PendingPage({
   searchParams,
 }: {
@@ -35,15 +69,11 @@ export default async function PendingPage({
 }) {
   const supabase = createClient();
   const direction: Direction = searchParams.type === 'out' ? 'out' : 'in';
+  const kind: Kind = searchParams.kind === 'payment' ? 'payment' : 'invoice';
   const { from, to } = resolvePeriod(searchParams);
 
-  const isInbound = direction === 'in';
-  const title = isInbound ? '미청구 처리' : '미정산 처리';
-  const subtitle = isInbound
-    ? '반입(매출) — 거래명세표 미발급된 거래처 / 일보 처리'
-    : '반출(매입) — 청구서 미수령된 처리 거래 처리';
+  const meta = modeMeta(kind, direction);
 
-  // 미처리 (is_invoiced=false) active 일보 조회 + 거래처 정보
   const { data: logsData } = await supabase
     .from('waste_logs')
     .select(
@@ -52,7 +82,7 @@ export default async function PendingPage({
        sites(name), waste_types(name)`,
     )
     .eq('direction', direction)
-    .eq('is_invoiced', false)
+    .eq(meta.filterField, false)
     .eq('status', 'active')
     .gte('log_date', from)
     .lte('log_date', to)
@@ -73,7 +103,6 @@ export default async function PendingPage({
   };
   const rows = (logsData ?? []) as unknown as Row[];
 
-  // 거래처별 그룹핑
   const groupMap = new Map<string, CompanyGroup>();
   for (const r of rows) {
     if (!r.companies) continue;
@@ -104,48 +133,59 @@ export default async function PendingPage({
       total_amount: r.total_amount,
       vehicle_no: r.vehicle_no,
       is_paid: r.is_paid,
+      is_invoiced: r.is_invoiced,
       site_name: r.sites?.name ?? null,
       waste_type_name: r.waste_types?.name ?? null,
     });
   }
   const groups = [...groupMap.values()].sort((a, b) => b.totalAmount - a.totalAmount);
 
+  const tabs: Array<{ type: Direction; kind: Kind; label: string }> = [
+    { type: 'in', kind: 'invoice', label: '미청구 (반입)' },
+    { type: 'out', kind: 'invoice', label: '미정산 (반출)' },
+    { type: 'in', kind: 'payment', label: '미수금 (반입)' },
+    { type: 'out', kind: 'payment', label: '미지급 (반출)' },
+  ];
+
   return (
     <>
       <PageHeader
-        title={title}
-        subtitle={subtitle}
+        title={meta.title}
+        subtitle={meta.subtitle}
         breadcrumb={[
           { label: '에이스알앤씨' },
           { label: '대시보드', href: '/dashboard' },
-          { label: title },
+          { label: meta.title },
         ]}
         actions={<DateRangePicker from={from} to={to} />}
       />
       <div className="flex-1 overflow-y-auto p-7 space-y-4">
         <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <Link
-            href={`/pending?type=in&from=${from}&to=${to}`}
-            scroll={false}
-          >
-            <Button size="sm" variant={isInbound ? 'default' : 'outline'}>
-              미청구 (반입)
-            </Button>
-          </Link>
-          <Link
-            href={`/pending?type=out&from=${from}&to=${to}`}
-            scroll={false}
-          >
-            <Button size="sm" variant={!isInbound ? 'default' : 'outline'}>
-              미정산 (반출)
-            </Button>
-          </Link>
+          {tabs.map((t) => {
+            const isActive = t.type === direction && t.kind === kind;
+            return (
+              <Link
+                key={`${t.type}-${t.kind}`}
+                href={`/pending?type=${t.type}&kind=${t.kind}&from=${from}&to=${to}`}
+                scroll={false}
+              >
+                <Button size="sm" variant={isActive ? 'default' : 'outline'}>
+                  {t.label}
+                </Button>
+              </Link>
+            );
+          })}
           <span className="ml-auto text-[11.5px] text-foreground-muted">
             기간 {from} ~ {to} · 거래처 {groups.length}곳 · 총 미처리 {rows.length}건
           </span>
         </div>
 
-        <PendingClient direction={direction} groups={groups} period={{ from, to }} />
+        <PendingClient
+          direction={direction}
+          kind={kind}
+          groups={groups}
+          period={{ from, to }}
+        />
       </div>
     </>
   );

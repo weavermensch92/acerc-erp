@@ -1,9 +1,18 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { Trash2, Loader2, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import {
+  Trash2,
+  Loader2,
+  X,
+  AlertTriangle,
+  CheckCircle2,
+  Save,
+  RotateCcw,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Pill } from '@/components/erp/Pill';
 import { Modal } from '@/components/erp/Modal';
@@ -15,10 +24,16 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table';
-import { bulkArchiveLogsAction } from '@/actions/waste-logs';
-import { formatKRW, formatKg, formatDate } from '@/lib/format';
+import {
+  bulkArchiveLogsAction,
+  bulkUpdateLogsInlineAction,
+  type InlineRowUpdate,
+  type BulkUpdateResult,
+} from '@/actions/waste-logs';
+import { calcBilling } from '@/lib/calc/billing';
+import { formatKRW, formatNumber, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { LogStatus, Direction } from '@/lib/types/database';
+import type { LogStatus, Direction, BillingType } from '@/lib/types/database';
 
 const directionLabel: Record<Direction, string> = { in: '반입', out: '반출' };
 
@@ -53,13 +68,51 @@ export interface LogRow {
   direction: Direction;
   vehicle_no: string | null;
   weight_kg: number | null;
+  unit_price: number | null;
+  transport_fee: number | null;
+  billing_type: BillingType;
+  supply_amount: number | null;
+  vat: number | null;
   total_amount: number | null;
   status: LogStatus;
   is_invoiced: boolean;
   is_paid: boolean;
+  note: string | null;
   companies: { id: string; name: string } | null;
   sites: { name: string } | null;
   waste_types: { name: string } | null;
+}
+
+interface RowState {
+  weight_kg: string;
+  unit_price: string;
+  transport_fee: string;
+  note: string;
+  is_invoiced: boolean;
+  is_paid: boolean;
+}
+
+function toRowState(row: LogRow): RowState {
+  return {
+    weight_kg: row.weight_kg !== null ? String(row.weight_kg) : '',
+    unit_price: row.unit_price !== null ? String(row.unit_price) : '',
+    transport_fee: row.transport_fee !== null ? String(row.transport_fee) : '0',
+    note: row.note ?? '',
+    is_invoiced: row.is_invoiced,
+    is_paid: row.is_paid,
+  };
+}
+
+function statesEqual(a: RowState | undefined, b: RowState | undefined): boolean {
+  if (!a || !b) return a === b;
+  return (
+    a.weight_kg === b.weight_kg &&
+    a.unit_price === b.unit_price &&
+    a.transport_fee === b.transport_fee &&
+    a.note === b.note &&
+    a.is_invoiced === b.is_invoiced &&
+    a.is_paid === b.is_paid
+  );
 }
 
 interface Props {
@@ -70,9 +123,75 @@ export function LogsTable({ rows }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reason, setReason] = useState('');
-  const [isPending, startTransition] = useTransition();
+  const [archivePending, startArchiveTransition] = useTransition();
+  const [savePending, startSaveTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [saveResult, setSaveResult] = useState<BulkUpdateResult | null>(null);
+
+  // 인라인 편집 상태 — row id → 편집된 값
+  const initial = useMemo(() => {
+    const m: Record<string, RowState> = {};
+    for (const r of rows) m[r.id] = toRowState(r);
+    return m;
+  }, [rows]);
+  const [edited, setEdited] = useState<Record<string, RowState>>(() => ({
+    ...initial,
+  }));
+
+  // rows prop 이 바뀌면 (필터 변경 등) 편집 상태 재초기화
+  useEffect(() => {
+    setEdited({ ...initial });
+    setSaveResult(null);
+  }, [initial]);
+
+  const dirtyIds = useMemo(
+    () => rows.map((r) => r.id).filter((id) => !statesEqual(edited[id], initial[id])),
+    [rows, edited, initial],
+  );
+
+  const updateField = <K extends keyof RowState>(
+    id: string,
+    field: K,
+    value: RowState[K],
+  ) => {
+    setEdited((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [field]: value },
+    }));
+    setSaveResult(null);
+  };
+
+  const resetEdits = () => {
+    setEdited({ ...initial });
+    setSaveResult(null);
+  };
+
+  const handleSave = () => {
+    const updates: InlineRowUpdate[] = dirtyIds.map((id) => {
+      const s = edited[id];
+      const row = rows.find((r) => r.id === id)!;
+      return {
+        id,
+        weight_kg: s.weight_kg ? Number(s.weight_kg) : null,
+        unit_price: s.unit_price ? Number(s.unit_price) : null,
+        transport_fee: s.transport_fee ? Number(s.transport_fee) : 0,
+        billing_type: row.billing_type,
+        is_invoiced: s.is_invoiced,
+        is_paid: s.is_paid,
+        note: s.note.trim() || null,
+      };
+    });
+    setSaveResult(null);
+    startSaveTransition(async () => {
+      const r = await bulkUpdateLogsInlineAction(updates, '');
+      setSaveResult(r);
+      if (r.ok) {
+        setSavedNotice(`${r.updated}건 저장 완료`);
+        setTimeout(() => setSavedNotice(null), 3000);
+      }
+    });
+  };
 
   // archived 행은 선택 못 하게 (이미 보관된 것은 추가 보관 X)
   const selectableRows = rows.filter((r) => r.status !== 'archived');
@@ -101,7 +220,7 @@ export function LogsTable({ rows }: Props) {
 
   const handleDelete = () => {
     setError(null);
-    startTransition(async () => {
+    startArchiveTransition(async () => {
       const r = await bulkArchiveLogsAction([...selected], reason || null);
       if (!r.ok) {
         setError(r.error ?? '삭제 실패');
@@ -161,7 +280,7 @@ export function LogsTable({ rows }: Props) {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
+      <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
@@ -179,23 +298,61 @@ export function LogsTable({ rows }: Props) {
               <TableHead>거래처</TableHead>
               <TableHead>현장</TableHead>
               <TableHead>성상</TableHead>
-              <TableHead className="text-right">중량</TableHead>
+              <TableHead className="text-right">중량(kg)</TableHead>
+              <TableHead className="text-right">단가</TableHead>
+              <TableHead className="text-right">운반비</TableHead>
               <TableHead className="text-right">청구금액</TableHead>
+              <TableHead>비고</TableHead>
               <TableHead>상태</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((row) => (
-              <Row
-                key={row.id}
-                row={row}
-                selected={selected.has(row.id)}
-                onToggle={() => toggleOne(row.id)}
-              />
-            ))}
+            {rows.map((row) => {
+              const s = edited[row.id] ?? initial[row.id];
+              return (
+                <Row
+                  key={row.id}
+                  row={row}
+                  state={s}
+                  isDirty={!statesEqual(s, initial[row.id])}
+                  selected={selected.has(row.id)}
+                  onToggleSelect={() => toggleOne(row.id)}
+                  onChange={(field, value) => updateField(row.id, field, value)}
+                />
+              );
+            })}
           </TableBody>
         </Table>
       </div>
+
+      {/* 인라인 편집 저장 바 */}
+      {dirtyIds.length > 0 && (
+        <div className="sticky bottom-4 z-10 mt-3 flex flex-wrap items-center gap-3 rounded-[10px] border border-warning bg-surface p-4 shadow-md">
+          <div className="flex items-center gap-2 text-sm">
+            <AlertTriangle className="h-4 w-4 text-warning" strokeWidth={1.75} />
+            <span className="font-semibold">{dirtyIds.length}건</span> 변경됨
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={resetEdits}>
+              <RotateCcw className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />전체 되돌리기
+            </Button>
+            <Button onClick={handleSave} disabled={savePending}>
+              {savePending ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-1 h-4 w-4" strokeWidth={1.75} />
+              )}
+              {dirtyIds.length}건 저장
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {saveResult && !saveResult.ok && saveResult.failed.length > 0 && (
+        <div className="mt-2 rounded-md border border-danger/40 bg-danger-bg/60 px-3 py-2 text-xs text-danger">
+          저장 실패 {saveResult.failed.length}건 — 새로고침 후 다시 시도해주세요.
+        </div>
+      )}
 
       {/* 확인 모달 */}
       <Modal
@@ -236,10 +393,10 @@ export function LogsTable({ rows }: Props) {
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={isPending}
+              disabled={archivePending}
               className="flex-1"
             >
-              {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              {archivePending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               {selected.size}건 삭제
             </Button>
           </div>
@@ -251,33 +408,49 @@ export function LogsTable({ rows }: Props) {
 
 function Row({
   row,
+  state,
+  isDirty,
   selected,
-  onToggle,
+  onToggleSelect,
+  onChange,
 }: {
   row: LogRow;
+  state: RowState;
+  isDirty: boolean;
   selected: boolean;
-  onToggle: () => void;
+  onToggleSelect: () => void;
+  onChange: <K extends keyof RowState>(field: K, value: RowState[K]) => void;
 }) {
-  const href = `/logs/${row.id}`;
-  const wrap = (children: React.ReactNode) => (
-    <Link href={href} className="block">
-      {children}
-    </Link>
-  );
   const isArchived = row.status === 'archived';
+  const calc = calcBilling({
+    billingType: row.billing_type,
+    weightKg: state.weight_kg ? Number(state.weight_kg) : 0,
+    unitPrice: state.unit_price ? Number(state.unit_price) : 0,
+    transportFee: state.transport_fee ? Number(state.transport_fee) : 0,
+  });
   const rowClass = cn(
     'transition-colors',
     selected && 'bg-info-bg/40',
-    !selected && row.status === 'pending_review' && 'bg-warning-bg/40 hover:bg-warning-bg/60',
-    !selected && isArchived && 'opacity-60',
+    isDirty && 'bg-warning-bg/30',
+    !selected && !isDirty && row.status === 'pending_review' && 'bg-warning-bg/40',
+    !selected && !isDirty && isArchived && 'opacity-60',
   );
+
+  // 상세 페이지로의 링크 — 텍스트 셀(일자/구분/현장/성상)만 적용
+  const detailHref = `/logs/${row.id}`;
+  const wrap = (children: React.ReactNode) => (
+    <Link href={detailHref} className="block">
+      {children}
+    </Link>
+  );
+
   return (
     <TableRow className={rowClass}>
       <TableCell onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
           checked={selected}
-          onChange={onToggle}
+          onChange={onToggleSelect}
           disabled={isArchived}
           className="h-3.5 w-3.5 rounded border-border"
           aria-label="선택"
@@ -318,12 +491,39 @@ function Row({
       <TableCell className="text-foreground-secondary">
         {wrap(row.waste_types?.name ?? '—')}
       </TableCell>
+      <CellEditable
+        value={state.weight_kg}
+        onChange={(v) => onChange('weight_kg', v)}
+        align="right"
+        mono
+        disabled={isArchived}
+      />
+      <CellEditable
+        value={state.unit_price}
+        onChange={(v) => onChange('unit_price', v)}
+        align="right"
+        mono
+        disabled={isArchived}
+      />
+      <CellEditable
+        value={state.transport_fee}
+        onChange={(v) => onChange('transport_fee', v)}
+        align="right"
+        mono
+        disabled={isArchived}
+      />
       <TableCell className="text-right font-mono text-xs">
-        {wrap(formatKg(row.weight_kg))}
+        {isDirty ? (
+          <span className="text-warning">{formatKRW(calc.totalAmount)}</span>
+        ) : (
+          formatKRW(row.total_amount)
+        )}
       </TableCell>
-      <TableCell className="text-right font-mono text-xs">
-        {wrap(formatKRW(row.total_amount))}
-      </TableCell>
+      <CellEditable
+        value={state.note}
+        onChange={(v) => onChange('note', v)}
+        disabled={isArchived}
+      />
       <TableCell>
         {wrap(
           <div className="flex flex-col items-start gap-1">
@@ -331,16 +531,51 @@ function Row({
               {statusLabelMap[row.status]}
             </Pill>
             <div className="flex flex-wrap gap-1">
-              <Pill tone={row.is_invoiced ? 'info' : 'danger'}>
-                {row.is_invoiced ? '청구' : '미청구'}
+              <Pill tone={state.is_invoiced ? 'info' : 'danger'}>
+                {state.is_invoiced ? '청구' : '미청구'}
               </Pill>
-              <Pill tone={row.is_paid ? 'info' : 'danger'}>
-                {row.is_paid ? '결재' : '미결재'}
+              <Pill tone={state.is_paid ? 'info' : 'danger'}>
+                {state.is_paid ? '결재' : '미결재'}
               </Pill>
             </div>
           </div>,
         )}
       </TableCell>
     </TableRow>
+  );
+}
+
+function CellEditable({
+  value,
+  onChange,
+  align = 'left',
+  mono = false,
+  disabled = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  align?: 'left' | 'right';
+  mono?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <TableCell onClick={(e) => e.stopPropagation()}>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        autoComplete="off"
+        className={cn(
+          'h-7 w-full rounded border border-transparent bg-transparent px-1.5 text-xs',
+          'placeholder:text-foreground-dim',
+          'focus:border-foreground focus:bg-surface focus:outline-none focus:ring-1 focus:ring-foreground/30',
+          'hover:border-border',
+          align === 'right' && 'text-right',
+          mono && 'font-mono',
+          disabled && 'cursor-not-allowed opacity-50',
+        )}
+      />
+    </TableCell>
   );
 }

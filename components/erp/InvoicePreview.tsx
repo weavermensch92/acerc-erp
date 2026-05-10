@@ -79,6 +79,9 @@ export function InvoicePreview({
         <p className="mt-2 text-center text-xs text-foreground-muted">
           {formatDate(period.from)} ~ {formatDate(period.to)} · 발급일 {formatDate(issuedAt)}
         </p>
+        <p className="mt-4 text-center text-sm leading-7">
+          아래와 같이 거래명세표를 제출합니다.
+        </p>
 
         {/* 공급자 / 공급받는자 */}
         <div className="mt-6 grid grid-cols-2 gap-4 text-xs">
@@ -90,6 +93,7 @@ export function InvoicePreview({
               // 현장명은 조회 시 특정 현장을 골랐을 때만 노출 (헷갈림 방지)
               ...(siteName ? ([['현장명', siteName]] as Array<[string, string]>) : []),
               ['폰번호', company.contact_phone ?? '—'],
+              ['계좌', '317-0005-6105-51 (농협)'],
             ]}
           />
           <PartyBox

@@ -287,6 +287,7 @@ export interface InlineRowUpdate {
   is_invoiced: boolean;
   is_paid: boolean;
   note: string | null;
+  waste_type_id?: string | null;
 }
 
 export interface BulkUpdateResult {
@@ -313,20 +314,24 @@ export async function bulkUpdateLogsInlineAction(
       unitPrice: u.unit_price,
       transportFee: u.transport_fee ?? 0,
     });
+    const updatePayload: Record<string, unknown> = {
+      weight_kg: u.weight_kg,
+      unit_price: u.unit_price,
+      transport_fee: u.transport_fee ?? 0,
+      billing_type: u.billing_type,
+      supply_amount: calc.supplyAmount,
+      vat: calc.vat,
+      total_amount: calc.totalAmount,
+      is_invoiced: u.is_invoiced,
+      is_paid: u.is_paid,
+      note: u.note ?? null,
+    };
+    if (u.waste_type_id !== undefined) {
+      updatePayload.waste_type_id = u.waste_type_id;
+    }
     const { error } = await supabase
       .from('waste_logs')
-      .update({
-        weight_kg: u.weight_kg,
-        unit_price: u.unit_price,
-        transport_fee: u.transport_fee ?? 0,
-        billing_type: u.billing_type,
-        supply_amount: calc.supplyAmount,
-        vat: calc.vat,
-        total_amount: calc.totalAmount,
-        is_invoiced: u.is_invoiced,
-        is_paid: u.is_paid,
-        note: u.note ?? null,
-      })
+      .update(updatePayload)
       .eq('id', u.id);
     if (error) {
       failed.push({ id: u.id, error: error.message });

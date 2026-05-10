@@ -81,7 +81,7 @@ export default async function LogsPage({
        weight_kg, unit_price, transport_fee, billing_type,
        supply_amount, vat, total_amount,
        status, is_invoiced, is_paid, note,
-       companies(id, name), sites(name), waste_types(name)`,
+       companies(id, name), sites(name), waste_types(id, name)`,
     )
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -122,6 +122,14 @@ export default async function LogsPage({
       (sitesByCompany[s.company_id] ??= []).push({ id: s.id, name: s.name });
     }
   }
+
+  // 성상(waste_types) 마스터 — 인라인 편집 드롭다운용
+  const { data: wasteTypesData } = await supabase
+    .from('waste_types')
+    .select('id, name')
+    .eq('is_active', true)
+    .order('name');
+  const wasteTypes = (wasteTypesData ?? []) as Array<{ id: string; name: string }>;
 
   // 상태별 카운트 (chip 우측 숫자)
   const { data: countsData } = await supabase
@@ -497,7 +505,11 @@ export default async function LogsPage({
               </p>
             </div>
           ) : (
-            <LogsTable rows={rows} sitesByCompany={sitesByCompany} />
+            <LogsTable
+              rows={rows}
+              sitesByCompany={sitesByCompany}
+              wasteTypes={wasteTypes}
+            />
           )}
         </div>
       </div>

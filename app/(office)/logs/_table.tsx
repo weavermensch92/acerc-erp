@@ -82,7 +82,7 @@ export interface LogRow {
   note: string | null;
   companies: { id: string; name: string } | null;
   sites: { name: string } | null;
-  waste_types: { name: string } | null;
+  waste_types: { id: string; name: string } | null;
 }
 
 interface RowState {
@@ -92,6 +92,7 @@ interface RowState {
   note: string;
   is_invoiced: boolean;
   is_paid: boolean;
+  waste_type_id: string;
 }
 
 function toRowState(row: LogRow): RowState {
@@ -102,6 +103,7 @@ function toRowState(row: LogRow): RowState {
     note: row.note ?? '',
     is_invoiced: row.is_invoiced,
     is_paid: row.is_paid,
+    waste_type_id: row.waste_types?.id ?? '',
   };
 }
 
@@ -113,16 +115,18 @@ function statesEqual(a: RowState | undefined, b: RowState | undefined): boolean 
     a.transport_fee === b.transport_fee &&
     a.note === b.note &&
     a.is_invoiced === b.is_invoiced &&
-    a.is_paid === b.is_paid
+    a.is_paid === b.is_paid &&
+    a.waste_type_id === b.waste_type_id
   );
 }
 
 interface Props {
   rows: LogRow[];
   sitesByCompany?: Record<string, Array<{ id: string; name: string }>>;
+  wasteTypes?: Array<{ id: string; name: string }>;
 }
 
-export function LogsTable({ rows, sitesByCompany = {} }: Props) {
+export function LogsTable({ rows, sitesByCompany = {}, wasteTypes = [] }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -183,6 +187,7 @@ export function LogsTable({ rows, sitesByCompany = {} }: Props) {
         is_invoiced: s.is_invoiced,
         is_paid: s.is_paid,
         note: s.note.trim() || null,
+        waste_type_id: s.waste_type_id || null,
       };
     });
     setSaveResult(null);
@@ -321,6 +326,7 @@ export function LogsTable({ rows, sitesByCompany = {} }: Props) {
                   row={row}
                   state={s}
                   sites={sites}
+                  wasteTypes={wasteTypes}
                   isDirty={!statesEqual(s, initial[row.id])}
                   selected={selected.has(row.id)}
                   onToggleSelect={() => toggleOne(row.id)}
@@ -418,6 +424,7 @@ function Row({
   row,
   state,
   sites,
+  wasteTypes,
   isDirty,
   selected,
   onToggleSelect,
@@ -427,6 +434,7 @@ function Row({
   row: LogRow;
   state: RowState;
   sites: Array<{ id: string; name: string }>;
+  wasteTypes: Array<{ id: string; name: string }>;
   isDirty: boolean;
   selected: boolean;
   onToggleSelect: () => void;
@@ -494,8 +502,33 @@ function Row({
       <TableCell className="text-foreground-secondary">
         {wrap(row.sites?.name ?? '—')}
       </TableCell>
-      <TableCell className="text-foreground-secondary">
-        {wrap(row.waste_types?.name ?? '—')}
+      <TableCell
+        className="text-foreground-secondary"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <select
+          value={state.waste_type_id}
+          onChange={(e) => onChange('waste_type_id', e.target.value)}
+          disabled={isArchived}
+          className={cn(
+            'h-7 w-full rounded border border-transparent bg-transparent px-1.5 text-xs',
+            'focus:border-foreground focus:bg-surface focus:outline-none focus:ring-1 focus:ring-foreground/30',
+            'hover:border-border',
+            isArchived && 'cursor-not-allowed opacity-50',
+          )}
+        >
+          <option value="">—</option>
+          {/* 현재 행에 매핑된 성상이 마스터 active 목록에 없을 수 있어 보존 옵션 추가 */}
+          {row.waste_types &&
+            !wasteTypes.some((w) => w.id === row.waste_types!.id) && (
+              <option value={row.waste_types.id}>{row.waste_types.name}</option>
+            )}
+          {wasteTypes.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.name}
+            </option>
+          ))}
+        </select>
       </TableCell>
       <CellEditable
         value={state.weight_kg}

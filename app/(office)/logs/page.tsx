@@ -127,7 +127,6 @@ export default async function LogsPage({
   const { data: wasteTypesData } = await supabase
     .from('waste_types')
     .select('id, name')
-    .eq('is_active', true)
     .order('name');
   const wasteTypes = (wasteTypesData ?? []) as Array<{ id: string; name: string }>;
 

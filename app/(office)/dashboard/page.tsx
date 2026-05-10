@@ -9,6 +9,7 @@ import {
 } from '@/components/erp/TopCompaniesCard';
 import { RecentLogsCard, type RecentLog } from '@/components/erp/RecentLogsCard';
 import { QuickActions } from '@/components/erp/QuickActions';
+import { BackupCard } from '@/components/erp/BackupCard';
 import { DateRangePicker } from '@/components/erp/DateRangePicker';
 import { createClient } from '@/lib/supabase/server';
 import { getReviewProcessEnabled } from '@/lib/settings';
@@ -393,6 +394,9 @@ export default async function DashboardPage({
           <RecentLogsCard logs={(recent ?? []) as unknown as RecentLog[]} />
           <QuickActions />
         </div>
+
+        {/* 백업 / 복원 */}
+        <BackupCard />
       </div>
     </>
   );

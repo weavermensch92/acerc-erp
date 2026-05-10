@@ -79,7 +79,6 @@ export function CertificatePreview({
               ['처리방법', selfCompany.processing_method || DEFAULT_PROCESSING_METHOD],
               ['전화번호', selfCompany.phone || '—'],
             ]}
-            stampUrl={selfCompany.stamp_url ?? null}
           />
           <PartyTable
             title="③ 폐기물 정보"

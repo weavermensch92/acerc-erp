@@ -77,9 +77,11 @@ export default async function PendingPage({
   const { data: logsData } = await supabase
     .from('waste_logs')
     .select(
-      `id, log_date, weight_kg, total_amount, vehicle_no, is_invoiced, is_paid,
+      `id, log_date, weight_kg, unit_price, transport_fee, billing_type,
+       total_amount, vehicle_no, is_invoiced, is_paid,
+       site_id, waste_type_id,
        company_id, companies(id, name),
-       sites(name), waste_types(name)`,
+       sites(id, name), waste_types(id, name)`,
     )
     .eq('direction', direction)
     .eq(meta.filterField, false)
@@ -92,16 +94,50 @@ export default async function PendingPage({
     id: string;
     log_date: string;
     weight_kg: number | null;
+    unit_price: number | null;
+    transport_fee: number | null;
+    billing_type: import('@/lib/types/database').BillingType;
     total_amount: number | null;
     vehicle_no: string | null;
     is_invoiced: boolean;
     is_paid: boolean;
+    site_id: string | null;
+    waste_type_id: string;
     company_id: string;
     companies: { id: string; name: string } | null;
-    sites: { name: string } | null;
-    waste_types: { name: string } | null;
+    sites: { id: string; name: string } | null;
+    waste_types: { id: string; name: string } | null;
   };
   const rows = (logsData ?? []) as unknown as Row[];
+
+  // 마스터 — 인라인 편집 드롭다운용
+  const companyIdsInGroups = Array.from(
+    new Set(rows.map((r) => r.company_id).filter(Boolean)),
+  );
+  const sitesByCompany: Record<string, Array<{ id: string; name: string }>> = {};
+  if (companyIdsInGroups.length > 0) {
+    const { data: sitesData } = await supabase
+      .from('sites')
+      .select('id, name, company_id')
+      .in('company_id', companyIdsInGroups)
+      .eq('is_active', true)
+      .order('name');
+    for (const s of (sitesData ?? []) as Array<{
+      id: string;
+      name: string;
+      company_id: string;
+    }>) {
+      (sitesByCompany[s.company_id] ??= []).push({ id: s.id, name: s.name });
+    }
+  }
+  const { data: wasteTypesData } = await supabase
+    .from('waste_types')
+    .select('id, name')
+    .order('name');
+  const wasteTypes = (wasteTypesData ?? []) as Array<{
+    id: string;
+    name: string;
+  }>;
 
   const groupMap = new Map<string, CompanyGroup>();
   for (const r of rows) {
@@ -130,11 +166,16 @@ export default async function PendingPage({
       id: r.id,
       log_date: r.log_date,
       weight_kg: r.weight_kg,
+      unit_price: r.unit_price,
+      transport_fee: r.transport_fee,
+      billing_type: r.billing_type,
       total_amount: r.total_amount,
       vehicle_no: r.vehicle_no,
       is_paid: r.is_paid,
       is_invoiced: r.is_invoiced,
+      site_id: r.site_id,
       site_name: r.sites?.name ?? null,
+      waste_type_id: r.waste_type_id,
       waste_type_name: r.waste_types?.name ?? null,
     });
   }
@@ -185,6 +226,8 @@ export default async function PendingPage({
           kind={kind}
           groups={groups}
           period={{ from, to }}
+          sitesByCompany={sitesByCompany}
+          wasteTypes={wasteTypes}
         />
       </div>
     </>

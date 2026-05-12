@@ -288,6 +288,8 @@ export interface InlineRowUpdate {
   is_paid: boolean;
   note: string | null;
   waste_type_id?: string | null;
+  site_id?: string | null;
+  vehicle_no?: string | null;
 }
 
 export interface BulkUpdateResult {
@@ -328,6 +330,12 @@ export async function bulkUpdateLogsInlineAction(
     };
     if (u.waste_type_id !== undefined) {
       updatePayload.waste_type_id = u.waste_type_id;
+    }
+    if (u.site_id !== undefined) {
+      updatePayload.site_id = u.site_id;
+    }
+    if (u.vehicle_no !== undefined) {
+      updatePayload.vehicle_no = u.vehicle_no;
     }
     const { error } = await supabase
       .from('waste_logs')

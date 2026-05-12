@@ -56,24 +56,30 @@ export default async function InvoicesPage({
   const supabase = createClient();
   const selfCompany = await getSelfCompanyInfo(supabase);
 
-  const [{ data: companiesData }, { data: sitesData }] = await Promise.all([
-    supabase
-      .from('companies')
-      .select('id, name')
-      .eq('is_internal', false)
-      .eq('is_deleted', false)
-      .order('name'),
-    supabase
-      .from('sites')
-      .select('id, name, company_id')
-      .eq('is_active', true)
-      .order('name'),
-  ]);
+  const [{ data: companiesData }, { data: sitesData }, { data: wasteTypesData }] =
+    await Promise.all([
+      supabase
+        .from('companies')
+        .select('id, name')
+        .eq('is_internal', false)
+        .eq('is_deleted', false)
+        .order('name'),
+      supabase
+        .from('sites')
+        .select('id, name, company_id')
+        .eq('is_active', true)
+        .order('name'),
+      supabase.from('waste_types').select('id, name').order('name'),
+    ]);
   const companies = (companiesData ?? []) as Array<{ id: string; name: string }>;
   const sites = (sitesData ?? []) as Array<{
     id: string;
     name: string;
     company_id: string;
+  }>;
+  const wasteTypes = (wasteTypesData ?? []) as Array<{
+    id: string;
+    name: string;
   }>;
 
   let preview: {
@@ -93,7 +99,8 @@ export default async function InvoicesPage({
       .select(
         `id, log_date, direction, vehicle_no, weight_kg, unit_price, transport_fee,
          billing_type, supply_amount, vat, total_amount, is_invoiced, is_paid, note,
-         sites(name), waste_types(name)`,
+         site_id, waste_type_id,
+         sites(id, name), waste_types(id, name)`,
       )
       .eq('company_id', searchParams.company)
       .neq('status', 'archived')
@@ -207,6 +214,10 @@ export default async function InvoicesPage({
                 period={preview.period}
                 logs={preview.logs as unknown as EditableLog[]}
                 siteName={preview.siteName}
+                sites={sites
+                  .filter((s) => s.company_id === preview!.company.id)
+                  .map((s) => ({ id: s.id, name: s.name }))}
+                wasteTypes={wasteTypes}
               />
             )}
           </>

@@ -37,8 +37,10 @@ export interface EditableLog {
   is_invoiced: boolean;
   is_paid: boolean;
   note: string | null;
-  sites: { name: string } | null;
-  waste_types: { name: string } | null;
+  site_id: string | null;
+  waste_type_id: string;
+  sites: { id: string; name: string } | null;
+  waste_types: { id: string; name: string } | null;
 }
 
 interface RowState {
@@ -49,6 +51,9 @@ interface RowState {
   is_invoiced: boolean;
   is_paid: boolean;
   note: string;
+  site_id: string;
+  waste_type_id: string;
+  vehicle_no: string;
 }
 
 const billingLabel: Record<BillingType, string> = {
@@ -69,6 +74,9 @@ function toRowState(log: EditableLog): RowState {
     is_invoiced: log.is_invoiced,
     is_paid: log.is_paid,
     note: log.note ?? '',
+    site_id: log.site_id ?? '',
+    waste_type_id: log.waste_type_id ?? '',
+    vehicle_no: log.vehicle_no ?? '',
   };
 }
 
@@ -81,7 +89,10 @@ function statesEqual(a: RowState | undefined, b: RowState | undefined): boolean 
     a.billing_type === b.billing_type &&
     a.is_invoiced === b.is_invoiced &&
     a.is_paid === b.is_paid &&
-    a.note === b.note
+    a.note === b.note &&
+    a.site_id === b.site_id &&
+    a.waste_type_id === b.waste_type_id &&
+    a.vehicle_no === b.vehicle_no
   );
 }
 
@@ -165,6 +176,9 @@ interface Props {
   // 거래명세표용 — 행 포함 체크박스 + 정렬 화살표
   selection?: SelectionConfig;
   sort?: SortConfig;
+  // 현장/성상 인라인 편집용 마스터 (선택). 없으면 해당 셀은 읽기 전용.
+  sites?: Array<{ id: string; name: string }>;
+  wasteTypes?: Array<{ id: string; name: string }>;
 }
 
 export function EditableInvoiceTable({
@@ -174,6 +188,8 @@ export function EditableInvoiceTable({
   amountLabel = '청구금액',
   selection,
   sort,
+  sites,
+  wasteTypes,
 }: Props) {
   const initial = useMemo(
     () =>
@@ -237,6 +253,9 @@ export function EditableInvoiceTable({
         is_invoiced: s.is_invoiced,
         is_paid: s.is_paid,
         note: s.note.trim() || null,
+        waste_type_id: s.waste_type_id || null,
+        site_id: s.site_id || null,
+        vehicle_no: s.vehicle_no.trim() || null,
       };
     });
     setResult(null);
@@ -350,10 +369,50 @@ export function EditableInvoiceTable({
                     {formatDate(l.log_date)}
                   </Td>
                   <Td>{directionLabel[l.direction]}</Td>
-                  <Td>{l.sites?.name ?? '—'}</Td>
-                  <Td>{l.waste_types?.name ?? '—'}</Td>
-                  <Td className="font-mono text-foreground-muted">
-                    {l.vehicle_no ?? '—'}
+                  <Td>
+                    {sites ? (
+                      <select
+                        value={s.site_id}
+                        onChange={(e) => updateField(l.id, 'site_id', e.target.value)}
+                        className="h-7 w-full rounded border border-transparent bg-transparent px-1 text-xs focus:border-foreground focus:bg-surface focus:outline-none hover:border-border"
+                      >
+                        <option value="">—</option>
+                        {l.site_id && !sites.some((x) => x.id === l.site_id) && (
+                          <option value={l.site_id}>{l.sites?.name ?? '(보존)'}</option>
+                        )}
+                        {sites.map((x) => (
+                          <option key={x.id} value={x.id}>{x.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      l.sites?.name ?? '—'
+                    )}
+                  </Td>
+                  <Td>
+                    {wasteTypes ? (
+                      <select
+                        value={s.waste_type_id}
+                        onChange={(e) => updateField(l.id, 'waste_type_id', e.target.value)}
+                        className="h-7 w-full rounded border border-transparent bg-transparent px-1 text-xs focus:border-foreground focus:bg-surface focus:outline-none hover:border-border"
+                      >
+                        <option value="">—</option>
+                        {l.waste_type_id && !wasteTypes.some((x) => x.id === l.waste_type_id) && (
+                          <option value={l.waste_type_id}>{l.waste_types?.name ?? '(보존)'}</option>
+                        )}
+                        {wasteTypes.map((x) => (
+                          <option key={x.id} value={x.id}>{x.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      l.waste_types?.name ?? '—'
+                    )}
+                  </Td>
+                  <Td>
+                    <CellInput
+                      mono
+                      value={s.vehicle_no}
+                      onChange={(v) => updateField(l.id, 'vehicle_no', v)}
+                    />
                   </Td>
                   <Td>
                     <select

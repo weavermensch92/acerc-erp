@@ -22,6 +22,8 @@ interface Props {
   period: { from: string; to: string };
   logs: EditableLog[];
   siteName?: string | null;
+  sites?: Array<{ id: string; name: string }>;
+  wasteTypes?: Array<{ id: string; name: string }>;
 }
 
 const directionRank: Record<string, number> = { in: 0, out: 1 };
@@ -43,6 +45,8 @@ export function InvoiceEditorPreview({
   period,
   logs,
   siteName = null,
+  sites,
+  wasteTypes,
 }: Props) {
   // 디폴트: 최근→예전 (log_date desc), 전체 선택
   const [sortKey, setSortKey] = useState<SortKey>('log_date');
@@ -112,6 +116,8 @@ export function InvoiceEditorPreview({
             setSortDir(dir);
           },
         }}
+        sites={sites}
+        wasteTypes={wasteTypes}
       />
 
       <InvoicePreview

@@ -80,7 +80,8 @@ export default async function PayoutsPage({
         .select(
           `id, log_date, direction, vehicle_no, weight_kg, unit_price, transport_fee,
            billing_type, supply_amount, vat, total_amount, is_invoiced, is_paid, note,
-           sites(name), waste_types(name)`,
+           site_id, waste_type_id,
+           sites(id, name), waste_types(id, name)`,
         )
         .eq('treatment_plant_id', searchParams.plant)
         .eq('direction', 'out')

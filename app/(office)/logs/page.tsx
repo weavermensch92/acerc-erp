@@ -3,11 +3,11 @@ import { Plus, X, Grid3x3, Download, Upload, CalendarDays, History } from 'lucid
 import { PageHeader } from '@/components/erp/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { createClient } from '@/lib/supabase/server';
 import { getReviewProcessEnabled } from '@/lib/settings';
 import { cn } from '@/lib/utils';
 import { LogsTable, type LogRow } from './_table';
+import { LogCompanyFilter } from './_company-filter';
 import type { LogStatus } from '@/lib/types/database';
 
 export const dynamic = 'force-dynamic';
@@ -432,44 +432,20 @@ export default async function LogsPage({
             })}
           </div>
 
-          {/* 거래처 select */}
-          <form method="get" className="flex flex-nowrap items-center gap-1.5">
-            {searchParams.status && (
-              <input type="hidden" name="status" value={searchParams.status} />
-            )}
-            {searchParams.direction && (
-              <input type="hidden" name="direction" value={searchParams.direction} />
-            )}
-            {searchParams.plant && (
-              <input type="hidden" name="plant" value={searchParams.plant} />
-            )}
-            {view === 'range' && <input type="hidden" name="view" value="range" />}
-            {view === 'daily' && (
-              <input type="hidden" name="date" value={dailyDate} />
-            )}
-            {view === 'range' && searchParams.from && (
-              <input type="hidden" name="from" value={searchParams.from} />
-            )}
-            {view === 'range' && searchParams.to && (
-              <input type="hidden" name="to" value={searchParams.to} />
-            )}
-            <span className="whitespace-nowrap text-[12.5px] font-medium text-foreground-secondary">거래처</span>
-            <Select
-              name="company"
-              defaultValue={searchParams.company ?? ''}
-              className="h-9 min-w-[200px] text-[13px]"
-            >
-              <option value="">전체</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-            <Button type="submit" size="sm" variant="outline" className="h-7">
-              적용
-            </Button>
-          </form>
+          {/* 거래처 select — 타자 검색 가능 */}
+          <LogCompanyFilter
+            companies={companies}
+            defaultValue={searchParams.company ?? ''}
+            preserved={{
+              status: searchParams.status,
+              direction: searchParams.direction,
+              plant: searchParams.plant,
+              view: view === 'range' ? 'range' : undefined,
+              date: view === 'daily' ? dailyDate : undefined,
+              from: view === 'range' ? searchParams.from : undefined,
+              to: view === 'range' ? searchParams.to : undefined,
+            }}
+          />
 
           {/* 우측 — 선택 칩 + 초기화 */}
           <div className="ml-auto flex flex-wrap items-center gap-1.5">

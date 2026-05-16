@@ -93,6 +93,7 @@ interface RowState {
   is_invoiced: boolean;
   is_paid: boolean;
   waste_type_id: string;
+  vehicle_no: string;
 }
 
 function toRowState(row: LogRow): RowState {
@@ -104,6 +105,7 @@ function toRowState(row: LogRow): RowState {
     is_invoiced: row.is_invoiced,
     is_paid: row.is_paid,
     waste_type_id: row.waste_types?.id ?? '',
+    vehicle_no: row.vehicle_no ?? '',
   };
 }
 
@@ -116,7 +118,8 @@ function statesEqual(a: RowState | undefined, b: RowState | undefined): boolean 
     a.note === b.note &&
     a.is_invoiced === b.is_invoiced &&
     a.is_paid === b.is_paid &&
-    a.waste_type_id === b.waste_type_id
+    a.waste_type_id === b.waste_type_id &&
+    a.vehicle_no === b.vehicle_no
   );
 }
 
@@ -188,6 +191,7 @@ export function LogsTable({ rows, sitesByCompany = {}, wasteTypes = [] }: Props)
         is_paid: s.is_paid,
         note: s.note.trim() || null,
         waste_type_id: s.waste_type_id || null,
+        vehicle_no: s.vehicle_no.trim() || null,
       };
     });
     setSaveResult(null);
@@ -306,6 +310,7 @@ export function LogsTable({ rows, sitesByCompany = {}, wasteTypes = [] }: Props)
               <TableHead>거래처</TableHead>
               <TableHead>현장</TableHead>
               <TableHead>성상</TableHead>
+              <TableHead>차량</TableHead>
               <TableHead className="text-right">중량(kg)</TableHead>
               <TableHead className="text-right">단가</TableHead>
               <TableHead className="text-right">운반비</TableHead>
@@ -530,6 +535,12 @@ function Row({
           ))}
         </select>
       </TableCell>
+      <CellEditable
+        value={state.vehicle_no}
+        onChange={(v) => onChange('vehicle_no', v)}
+        mono
+        disabled={isArchived}
+      />
       <CellEditable
         value={state.weight_kg}
         onChange={(v) => onChange('weight_kg', v)}

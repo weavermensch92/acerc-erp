@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -37,6 +37,14 @@ export function CompanyForm(props: CompanyFormProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const noticeRef = useRef<HTMLDivElement | null>(null);
+
+  // 모바일에서 결과(에러/성공)가 화면 밖에 있을 때 보이게 스크롤
+  useEffect(() => {
+    if ((error || savedNotice) && noticeRef.current) {
+      noticeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [error, savedNotice]);
 
   const {
     register,
@@ -48,6 +56,16 @@ export function CompanyForm(props: CompanyFormProps) {
   const onSubmit = handleSubmit((data) => {
     setError(null);
     setSavedNotice(null);
+    // valueAsNumber 가 빈 입력에서 NaN 을 반환 → 스키마 검증 실패 원인.
+    // 명시적으로 null 변환.
+    const rawUnit = data.default_unit_price as number | '' | null | undefined;
+    const unit =
+      rawUnit === '' ||
+      rawUnit === null ||
+      rawUnit === undefined ||
+      Number.isNaN(rawUnit)
+        ? null
+        : Number(rawUnit);
     const input = {
       name: data.name.trim(),
       business_no: data.business_no?.trim() || null,
@@ -58,7 +76,7 @@ export function CompanyForm(props: CompanyFormProps) {
       business_type: data.business_type?.trim() || null,
       business_item: data.business_item?.trim() || null,
       email: data.email?.trim() || null,
-      default_unit_price: data.default_unit_price === '' ? null : Number(data.default_unit_price),
+      default_unit_price: unit,
       is_internal: data.is_internal,
     };
 
@@ -191,14 +209,18 @@ export function CompanyForm(props: CompanyFormProps) {
         />
       </Section>
 
-      {error && (
-        <div className="rounded-md bg-danger-bg px-3 py-2 text-xs text-danger">{error}</div>
-      )}
-      {savedNotice && (
-        <div className="rounded-md bg-success-bg px-3 py-2 text-xs text-success">
-          {savedNotice}
-        </div>
-      )}
+      <div ref={noticeRef}>
+        {error && (
+          <div className="rounded-md bg-danger-bg px-3 py-2 text-sm font-medium text-danger">
+            {error}
+          </div>
+        )}
+        {savedNotice && (
+          <div className="rounded-md bg-success-bg px-3 py-2 text-sm font-medium text-success">
+            {savedNotice}
+          </div>
+        )}
+      </div>
 
       <div className="flex gap-2">
         <Button

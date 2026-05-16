@@ -9,7 +9,10 @@ import {
   AlertTriangle,
   ChevronUp,
   ChevronDown,
+  FileText,
+  Scale,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { calcBilling } from '@/lib/calc/billing';
@@ -331,6 +334,7 @@ export function EditableInvoiceTable({
               <Th className="w-12 text-center" sortKey="is_invoiced" sort={sort}>{invoicedLabel}</Th>
               <Th className="w-12 text-center" sortKey="is_paid" sort={sort}>{paidLabel}</Th>
               <Th className="w-32">비고</Th>
+              {selection && <Th className="w-20 text-center">발급</Th>}
               <Th className="w-10"></Th>
             </tr>
           </thead>
@@ -482,6 +486,30 @@ export function EditableInvoiceTable({
                       onChange={(v) => updateField(l.id, 'note', v)}
                     />
                   </Td>
+                  {selection && (
+                    <Td className="text-center">
+                      <div className="flex items-center justify-center gap-0.5">
+                        <Link
+                          href={`/logs/${l.id}/certificate`}
+                          target="_blank"
+                          rel="noopener"
+                          title="처리확인서 발급"
+                          className="rounded p-1 text-foreground-muted hover:bg-background-subtle hover:text-foreground"
+                        >
+                          <FileText className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        </Link>
+                        <Link
+                          href={`/logs/${l.id}/weight-cert`}
+                          target="_blank"
+                          rel="noopener"
+                          title="계량증명서 발급 (3부)"
+                          className="rounded p-1 text-foreground-muted hover:bg-background-subtle hover:text-foreground"
+                        >
+                          <Scale className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        </Link>
+                      </div>
+                    </Td>
+                  )}
                   <Td>
                     {isDirty && (
                       <button
@@ -508,7 +536,7 @@ export function EditableInvoiceTable({
                 <td className="px-2 py-2 text-right font-mono">
                   {formatKRW(totalCalc.total)}
                 </td>
-                <td colSpan={4}></td>
+                <td colSpan={selection ? 5 : 4}></td>
               </tr>
             )}
           </tbody>

@@ -92,6 +92,12 @@ export default async function InvoicesPage({
 
   const { from, to } = resolvePeriod(searchParams);
 
+  const certHref = searchParams.company
+    ? `/invoices/certificate?company=${searchParams.company}${
+        searchParams.site ? `&site=${searchParams.site}` : ''
+      }&from=${from}&to=${to}`
+    : null;
+
   if (searchParams.company) {
 
     let logsQuery = supabase
@@ -144,6 +150,13 @@ export default async function InvoicesPage({
         breadcrumb={[{ label: '에이스알앤씨' }, { label: '거래명세표' }]}
         actions={
           <>
+            {certHref && (
+              <Link href={certHref} target="_blank" rel="noopener">
+                <Button size="sm" variant="outline">
+                  처리확인서
+                </Button>
+              </Link>
+            )}
             <Link href="/invoices/batches">
               <Button size="sm" variant="outline">
                 발급 이력

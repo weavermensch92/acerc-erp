@@ -5,8 +5,8 @@ import { useMemo, useState, useTransition } from 'react';
 import { Loader2, Search, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { DateRangePicker } from '@/components/erp/DateRangePicker';
+import { SearchableSelect } from '@/components/erp/SearchableSelect';
 
 interface CompanyOption {
   id: string;
@@ -85,36 +85,26 @@ export function InvoiceForm({
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="inv-company">거래처</Label>
-          <Select
+          <SearchableSelect
             id="inv-company"
             value={companyId}
-            onChange={(e) => handleCompanyChange(e.target.value)}
+            onChange={handleCompanyChange}
+            options={companies}
+            emptyLabel="거래처 검색…"
             className="min-w-[220px]"
-          >
-            <option value="">선택…</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="inv-site">현장 (선택)</Label>
-          <Select
+          <SearchableSelect
             id="inv-site"
             value={siteId}
-            onChange={(e) => setSiteId(e.target.value)}
+            onChange={setSiteId}
+            options={siteOptions}
+            emptyLabel={companyId ? '현장 검색 (전체)' : '거래처 먼저 선택'}
             disabled={!companyId || siteOptions.length === 0}
             className="min-w-[200px]"
-          >
-            <option value="">— 전체 —</option>
-            {siteOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
         <div className="space-y-1.5">
           <Label>기간</Label>

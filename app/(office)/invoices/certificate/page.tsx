@@ -10,6 +10,7 @@ import {
 } from '@/components/erp/PeriodCertificatePreview';
 import { createClient } from '@/lib/supabase/server';
 import { getSelfCompanyInfo } from '@/lib/settings';
+import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +55,8 @@ export default async function PeriodCertificatePage({
   const supabase = createClient();
   const selfCompany = await getSelfCompanyInfo(supabase);
 
-  let logsQuery = supabase
+  // 칩 필터를 위해 항상 기간 내 전체 행을 읽고 메모리에서 필터링.
+  const logsQuery = supabase
     .from('waste_logs')
     .select(
       `id, log_date, weight_kg, note, site_id,
@@ -67,10 +69,6 @@ export default async function PeriodCertificatePage({
     .gte('log_date', period.from)
     .lte('log_date', period.to)
     .order('log_date', { ascending: true });
-
-  if (searchParams.site) {
-    logsQuery = logsQuery.eq('site_id', searchParams.site);
-  }
 
   const [companyRes, logsRes] = await Promise.all([
     supabase
@@ -88,7 +86,34 @@ export default async function PeriodCertificatePage({
     address: string | null;
   };
 
-  const rows = (logsRes.data ?? []) as unknown as LogRow[];
+  const allRows = (logsRes.data ?? []) as unknown as LogRow[];
+
+  // 칩에 표시할 전체 현장 목록 (기간 내 거래 있는 현장만)
+  const siteChipMap = new Map<
+    string,
+    { id: string | null; name: string | null; count: number }
+  >();
+  for (const r of allRows) {
+    const key = r.site_id ?? '__none__';
+    const existing = siteChipMap.get(key) ?? {
+      id: r.site_id,
+      name: r.sites?.name ?? null,
+      count: 0,
+    };
+    existing.count++;
+    siteChipMap.set(key, existing);
+  }
+  const siteChips = Array.from(siteChipMap.values()).sort((a, b) =>
+    (a.name ?? '').localeCompare(b.name ?? '', 'ko'),
+  );
+
+  // 현재 선택된 site 필터 — '__none__' 은 미지정 현장만, 그 외는 site_id 매칭
+  const selectedSite = searchParams.site ?? null;
+  const rows = selectedSite
+    ? allRows.filter((r) =>
+        selectedSite === '__none__' ? r.site_id === null : r.site_id === selectedSite,
+      )
+    : allRows;
 
   // 현장별 그룹화 — site_id null 은 '미지정' 으로 묶음.
   const groups = new Map<
@@ -125,6 +150,10 @@ export default async function PeriodCertificatePage({
     searchParams.site ? `&site=${searchParams.site}` : ''
   }&from=${period.from}&to=${period.to}`;
 
+  const baseHref = `/invoices/certificate?company=${companyId}&from=${period.from}&to=${period.to}`;
+  const chipHref = (siteId: string | null) =>
+    siteId === null ? baseHref : `${baseHref}&site=${siteId}`;
+
   return (
     <>
       <PageHeader
@@ -150,6 +179,34 @@ export default async function PeriodCertificatePage({
         }
       />
       <div className="flex-1 overflow-y-auto p-7 print:p-0">
+        {/* 현장 칩 필터 — 인쇄 시 숨김 */}
+        {siteChips.length > 0 && (
+          <div className="mb-5 flex flex-wrap items-center gap-1.5 print:hidden">
+            <span className="mr-1 text-xs font-medium text-foreground-secondary">
+              현장
+            </span>
+            <ChipLink
+              href={baseHref}
+              active={!selectedSite}
+              count={allRows.length}
+            >
+              전체
+            </ChipLink>
+            {siteChips.map((s) => {
+              const sid = s.id ?? '__none__';
+              return (
+                <ChipLink
+                  key={sid}
+                  href={chipHref(sid)}
+                  active={selectedSite === sid}
+                  count={s.count}
+                >
+                  {s.name ?? '(현장 미지정)'}
+                </ChipLink>
+              );
+            })}
+          </div>
+        )}
         {siteGroups.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-surface p-6 text-center print:hidden">
             <p className="text-sm text-foreground-muted">
@@ -178,5 +235,39 @@ export default async function PeriodCertificatePage({
         )}
       </div>
     </>
+  );
+}
+
+function ChipLink({
+  href,
+  active,
+  count,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors',
+        active
+          ? 'border-foreground bg-foreground text-background'
+          : 'border-border bg-surface text-foreground-secondary hover:bg-background-subtle',
+      )}
+    >
+      {children}
+      <span
+        className={cn(
+          'rounded-full px-1.5 text-[10px] tabular-nums',
+          active ? 'bg-background/20' : 'bg-background-subtle text-foreground-muted',
+        )}
+      >
+        {count}
+      </span>
+    </Link>
   );
 }

@@ -127,13 +127,11 @@ export default async function LogsPage({
           `representative.ilike.${like}`,
           `email.ilike.${like}`,
         ];
-        // 전화번호 숫자만 입력한 경우 — 거래처 phone 의 숫자만 비교는 어렵기에 ilike 로 우회
         if (digits.length >= 3) filters.push(`contact_phone.ilike.%${digits}%`);
         q = q.or(filters.join(','));
         const { data } = await q;
         return (data ?? []).map((r) => r.id as string);
       })(),
-      // 현장: name | address
       (async () => {
         const { data } = await supabase
           .from('sites')
@@ -141,7 +139,6 @@ export default async function LogsPage({
           .or(`name.ilike.${like},address.ilike.${like}`);
         return (data ?? []).map((r) => r.id as string);
       })(),
-      // 성상
       (async () => {
         const { data } = await supabase
           .from('waste_types')
@@ -149,7 +146,6 @@ export default async function LogsPage({
           .ilike('name', like);
         return (data ?? []).map((r) => r.id as string);
       })(),
-      // 처리장
       (async () => {
         const { data } = await supabase
           .from('treatment_plants')
@@ -159,26 +155,48 @@ export default async function LogsPage({
       })(),
     ]);
 
-    // waste_logs OR 조건: 직접 컬럼(vehicle_no, note) + 마스터 FK 매칭
-    const logFilters: string[] = [
-      `vehicle_no.ilike.${like}`,
-      `note.ilike.${like}`,
-      `treatment_plant_name_snapshot.ilike.${like}`,
-    ];
-    if (matchCompanies.length > 0) {
-      logFilters.push(`company_id.in.(${matchCompanies.join(',')})`);
+    // Supabase .or() 안에 .in.(uuid1,uuid2) 를 넣으면 콤마가 OR 구분자와 충돌해
+    // 쿼리가 깨짐. 회피: 매칭되는 waste_log id 들을 미리 모은 뒤 .in('id', ...) 로 한 번에 필터.
+    const matchedLogIds = new Set<string>();
+
+    // 1) waste_logs 직접 컬럼 (vehicle_no / note / snapshot) ilike
+    const { data: directLogs } = await supabase
+      .from('waste_logs')
+      .select('id')
+      .or(
+        `vehicle_no.ilike.${like},note.ilike.${like},treatment_plant_name_snapshot.ilike.${like}`,
+      );
+    for (const r of (directLogs ?? []) as Array<{ id: string }>) {
+      matchedLogIds.add(r.id);
     }
-    if (matchSites.length > 0) {
-      logFilters.push(`site_id.in.(${matchSites.join(',')})`);
+
+    // 2) 마스터 매칭별로 log id 수집 (각 in 절은 개별 쿼리라 콤마 충돌 없음)
+    const collect = async (column: string, ids: string[]) => {
+      if (ids.length === 0) return;
+      const { data } = await supabase
+        .from('waste_logs')
+        .select('id')
+        .in(column, ids);
+      for (const r of (data ?? []) as Array<{ id: string }>) {
+        matchedLogIds.add(r.id);
+      }
+    };
+    await Promise.all([
+      collect('company_id', matchCompanies),
+      collect('site_id', matchSites),
+      collect('waste_type_id', matchWasteTypes),
+      collect('treatment_plant_id', matchPlants),
+    ]);
+
+    // 매칭 0건이면 의도적으로 빈 결과 — 존재하지 않는 id 로 필터
+    const idList = Array.from(matchedLogIds);
+    if (idList.length === 0) {
+      query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+    } else {
+      query = query.in('id', idList);
     }
-    if (matchWasteTypes.length > 0) {
-      logFilters.push(`waste_type_id.in.(${matchWasteTypes.join(',')})`);
-    }
-    if (matchPlants.length > 0) {
-      logFilters.push(`treatment_plant_id.in.(${matchPlants.join(',')})`);
-    }
-    query = query.or(logFilters.join(','));
   }
+
 
   const { data: logs } = await query;
   const rows = (logs ?? []) as unknown as LogRow[];

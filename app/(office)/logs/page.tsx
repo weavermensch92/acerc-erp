@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, X, Grid3x3, Download, Upload, CalendarDays, History } from 'lucide-react';
+import { Plus, X, Grid3x3, Download, Upload, CalendarDays, History, Search } from 'lucide-react';
 import { PageHeader } from '@/components/erp/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,12 @@ interface SearchParams {
   company?: string;
   direction?: string;
   plant?: string;
+  q?: string; // 전역 검색어
+}
+
+// 전화번호 검색용 — 입력 문자열에서 숫자만 추출 (예: '010-1234-5678' → '01012345678')
+function digitsOnly(s: string): string {
+  return s.replace(/[^0-9]/g, '');
 }
 
 const statusFiltersAll: Array<{ id: string; label: string; value?: LogStatus }> = [
@@ -101,6 +107,79 @@ export default async function LogsPage({
   }
   if (searchParams.plant) query = query.eq('treatment_plant_id', searchParams.plant);
 
+  // 전역 검색 — 거래처/현장/성상/처리장/차량/비고/연락처/사업자번호 모두 매칭
+  const searchTerm = searchParams.q?.trim() ?? '';
+  if (searchTerm) {
+    const like = `%${searchTerm}%`;
+    const digits = digitsOnly(searchTerm);
+
+    // 관련 마스터 ID 들 (이름·연락처·사업자번호로 매칭)
+    const [matchCompanies, matchSites, matchWasteTypes, matchPlants] = await Promise.all([
+      // 거래처: name | business_no | contact_name | contact_phone | address | representative | email
+      (async () => {
+        let q = supabase.from('companies').select('id');
+        const filters = [
+          `name.ilike.${like}`,
+          `business_no.ilike.${like}`,
+          `contact_name.ilike.${like}`,
+          `contact_phone.ilike.${like}`,
+          `address.ilike.${like}`,
+          `representative.ilike.${like}`,
+          `email.ilike.${like}`,
+        ];
+        // 전화번호 숫자만 입력한 경우 — 거래처 phone 의 숫자만 비교는 어렵기에 ilike 로 우회
+        if (digits.length >= 3) filters.push(`contact_phone.ilike.%${digits}%`);
+        q = q.or(filters.join(','));
+        const { data } = await q;
+        return (data ?? []).map((r) => r.id as string);
+      })(),
+      // 현장: name | address
+      (async () => {
+        const { data } = await supabase
+          .from('sites')
+          .select('id')
+          .or(`name.ilike.${like},address.ilike.${like}`);
+        return (data ?? []).map((r) => r.id as string);
+      })(),
+      // 성상
+      (async () => {
+        const { data } = await supabase
+          .from('waste_types')
+          .select('id')
+          .ilike('name', like);
+        return (data ?? []).map((r) => r.id as string);
+      })(),
+      // 처리장
+      (async () => {
+        const { data } = await supabase
+          .from('treatment_plants')
+          .select('id')
+          .or(`name.ilike.${like},address.ilike.${like}`);
+        return (data ?? []).map((r) => r.id as string);
+      })(),
+    ]);
+
+    // waste_logs OR 조건: 직접 컬럼(vehicle_no, note) + 마스터 FK 매칭
+    const logFilters: string[] = [
+      `vehicle_no.ilike.${like}`,
+      `note.ilike.${like}`,
+      `treatment_plant_name_snapshot.ilike.${like}`,
+    ];
+    if (matchCompanies.length > 0) {
+      logFilters.push(`company_id.in.(${matchCompanies.join(',')})`);
+    }
+    if (matchSites.length > 0) {
+      logFilters.push(`site_id.in.(${matchSites.join(',')})`);
+    }
+    if (matchWasteTypes.length > 0) {
+      logFilters.push(`waste_type_id.in.(${matchWasteTypes.join(',')})`);
+    }
+    if (matchPlants.length > 0) {
+      logFilters.push(`treatment_plant_id.in.(${matchPlants.join(',')})`);
+    }
+    query = query.or(logFilters.join(','));
+  }
+
   const { data: logs } = await query;
   const rows = (logs ?? []) as unknown as LogRow[];
 
@@ -151,8 +230,9 @@ export default async function LogsPage({
     if (searchParams.company) params.set('company', searchParams.company);
     if (searchParams.direction) params.set('direction', searchParams.direction);
     if (searchParams.plant) params.set('plant', searchParams.plant);
-    const q = params.toString();
-    return q ? `/logs?${q}` : '/logs';
+    if (searchTerm) params.set('q', searchTerm);
+    const qs = params.toString();
+    return qs ? `/logs?${qs}` : '/logs';
   };
 
   const buildDirectionHref = (directionValue?: string) => {
@@ -165,22 +245,22 @@ export default async function LogsPage({
     if (view === 'range' && searchParams.to) params.set('to', searchParams.to);
     if (searchParams.company) params.set('company', searchParams.company);
     if (searchParams.plant) params.set('plant', searchParams.plant);
-    const q = params.toString();
-    return q ? `/logs?${q}` : '/logs';
+    if (searchTerm) params.set('q', searchTerm);
+    const qs = params.toString();
+    return qs ? `/logs?${qs}` : '/logs';
   };
 
   const buildViewHref = (newView: 'daily' | 'range') => {
     const params = new URLSearchParams();
     if (newView === 'range') params.set('view', 'range');
-    // daily 는 디폴트라 view 파라미터 생략 가능
     if (newView === 'daily') params.set('date', dailyDate);
-    // 다른 필터는 보존
     if (searchParams.status) params.set('status', searchParams.status);
     if (searchParams.company) params.set('company', searchParams.company);
     if (searchParams.direction) params.set('direction', searchParams.direction);
     if (searchParams.plant) params.set('plant', searchParams.plant);
-    const q = params.toString();
-    return q ? `/logs?${q}` : '/logs';
+    if (searchTerm) params.set('q', searchTerm);
+    const qs = params.toString();
+    return qs ? `/logs?${qs}` : '/logs';
   };
 
   const hasFilter =
@@ -190,6 +270,7 @@ export default async function LogsPage({
     !!searchParams.company ||
     !!searchParams.direction ||
     !!searchParams.plant ||
+    !!searchTerm ||
     view === 'range';
 
   const selectedPlantName = searchParams.plant
@@ -294,6 +375,59 @@ export default async function LogsPage({
           </Link>
         </div>
 
+        {/* 전역 검색바 — 거래처/현장/성상/처리장/차량/연락처/사업자번호/비고 모두 매칭 */}
+        <form
+          method="get"
+          className="flex flex-shrink-0 items-center gap-2 border-b border-border bg-surface px-7 py-3"
+        >
+          {/* 기존 필터 보존 hidden — q 변경 시에도 다른 필터 유지 */}
+          {view === 'range' && <input type="hidden" name="view" value="range" />}
+          {view === 'daily' && <input type="hidden" name="date" value={dailyDate} />}
+          {searchParams.status && (
+            <input type="hidden" name="status" value={searchParams.status} />
+          )}
+          {searchParams.direction && (
+            <input type="hidden" name="direction" value={searchParams.direction} />
+          )}
+          {searchParams.company && (
+            <input type="hidden" name="company" value={searchParams.company} />
+          )}
+          {searchParams.plant && (
+            <input type="hidden" name="plant" value={searchParams.plant} />
+          )}
+          {view === 'range' && searchParams.from && (
+            <input type="hidden" name="from" value={searchParams.from} />
+          )}
+          {view === 'range' && searchParams.to && (
+            <input type="hidden" name="to" value={searchParams.to} />
+          )}
+          <div className="relative flex-1 max-w-2xl">
+            <Search
+              className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-muted"
+              strokeWidth={1.75}
+            />
+            <input
+              type="text"
+              name="q"
+              defaultValue={searchTerm}
+              placeholder="검색 — 거래처명 · 사업자번호 · 담당자 · 연락처 · 차량번호 · 현장 · 성상 · 처리장 · 비고"
+              className="h-9 w-full rounded-md border border-border bg-surface pl-8 pr-3 text-[13px] placeholder:text-foreground-muted focus:border-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            />
+          </div>
+          <Button type="submit" size="sm" variant="outline" className="h-9">
+            검색
+          </Button>
+          {searchTerm && (
+            <Link
+              href={buildHref(searchParams.status).replace(/[?&]q=[^&]*/, '')}
+              className="rounded-md px-2 py-1 text-xs text-foreground-muted hover:bg-background-subtle"
+              title="검색어 지우기"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+            </Link>
+          )}
+        </form>
+
         {/* 통합 필터 바 — 데스크탑 가로 정렬, 모바일 세로 wrap. 그룹 간 넓은 간격 */}
         <div className="flex flex-shrink-0 flex-col gap-3 border-b border-border bg-surface px-7 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-10 lg:gap-y-3">
           {/* 일일 일자 선택 (일일 뷰만) */}
@@ -311,6 +445,7 @@ export default async function LogsPage({
               {searchParams.plant && (
                 <input type="hidden" name="plant" value={searchParams.plant} />
               )}
+              {searchTerm && <input type="hidden" name="q" value={searchTerm} />}
               <Link
                 href={buildViewHref('daily').replace(`date=${dailyDate}`, `date=${prevDayIso}`)}
                 className="rounded-md border border-border bg-surface px-2 py-1 text-xs hover:bg-background-subtle"
@@ -358,6 +493,10 @@ export default async function LogsPage({
               {searchParams.plant && (
                 <input type="hidden" name="plant" value={searchParams.plant} />
               )}
+              {searchParams.company && (
+                <input type="hidden" name="company" value={searchParams.company} />
+              )}
+              {searchTerm && <input type="hidden" name="q" value={searchTerm} />}
               <input type="hidden" name="view" value="range" />
               <div>
                 <label className="block text-[10px] text-foreground-muted">시작일</label>
@@ -444,11 +583,17 @@ export default async function LogsPage({
               date: view === 'daily' ? dailyDate : undefined,
               from: view === 'range' ? searchParams.from : undefined,
               to: view === 'range' ? searchParams.to : undefined,
+              q: searchTerm || undefined,
             }}
           />
 
           {/* 우측 — 선택 칩 + 초기화 */}
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            {searchTerm && (
+              <span className="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10.5px] text-info">
+                검색: &quot;{searchTerm}&quot;
+              </span>
+            )}
             {selectedCompanyName && (
               <span className="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10.5px] text-info">
                 거래처: {selectedCompanyName}

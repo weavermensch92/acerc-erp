@@ -38,7 +38,22 @@ export default async function CompaniesPage({
   } else {
     query = query.eq('is_deleted', false);
   }
-  if (q) query = query.ilike('name', `%${q}%`);
+  if (q) {
+    // 거래처명·사업자번호·담당자·연락처·주소·대표자·이메일·업태·종목 모두 검색
+    const like = `%${q}%`;
+    const filters = [
+      `name.ilike.${like}`,
+      `business_no.ilike.${like}`,
+      `contact_name.ilike.${like}`,
+      `contact_phone.ilike.${like}`,
+      `address.ilike.${like}`,
+      `representative.ilike.${like}`,
+      `email.ilike.${like}`,
+      `business_type.ilike.${like}`,
+      `business_item.ilike.${like}`,
+    ];
+    query = query.or(filters.join(','));
+  }
   const { data: companiesData } = await query;
   const companies = (companiesData ?? []) as Company[];
 
@@ -92,8 +107,8 @@ export default async function CompaniesPage({
             <Input
               name="q"
               defaultValue={q}
-              placeholder="거래처명 검색…"
-              className="max-w-sm"
+              placeholder="거래처명 · 사업자번호 · 담당자 · 연락처 · 주소 · 대표자 · 이메일 · 업태 · 종목"
+              className="max-w-2xl"
             />
             <Button type="submit" variant="outline" size="sm">
               검색

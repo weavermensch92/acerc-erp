@@ -32,15 +32,18 @@ export default async function CompaniesPage({
   const q = searchParams.q?.trim() ?? '';
   const showDeleted = searchParams.deleted === '1';
 
-  let query = supabase.from('companies').select('*').order('name');
-  if (showDeleted) {
-    query = query.eq('is_deleted', true);
+  let companies: Company[];
+
+  if (!q) {
+    let query = supabase.from('companies').select('*').order('name');
+    query = showDeleted ? query.eq('is_deleted', true) : query.eq('is_deleted', false);
+    const { data } = await query;
+    companies = (data ?? []) as Company[];
   } else {
-    query = query.eq('is_deleted', false);
-  }
-  if (q) {
-    // 거래처명·사업자번호·담당자·연락처·주소·대표자·이메일·업태·종목 모두 검색
+    // 검색 — 거래처 본인 필드 + 차량번호(일보 경유) 모두 매칭
     const like = `%${q}%`;
+
+    // 1) 거래처 본인 필드 매칭 (id 만)
     const filters = [
       `name.ilike.${like}`,
       `business_no.ilike.${like}`,
@@ -52,10 +55,39 @@ export default async function CompaniesPage({
       `business_type.ilike.${like}`,
       `business_item.ilike.${like}`,
     ];
-    query = query.or(filters.join(','));
+    const directRes = await supabase
+      .from('companies')
+      .select('id')
+      .or(filters.join(','));
+
+    // 2) 일보 차량번호 → 거래처 ID 매칭 (companies 와 차량이 직접 연결 안 돼 있음)
+    const viaVehicleRes = await supabase
+      .from('waste_logs')
+      .select('company_id')
+      .ilike('vehicle_no', like);
+
+    const matchedIds = Array.from(
+      new Set([
+        ...((directRes.data ?? []) as Array<{ id: string }>).map((r) => r.id),
+        ...((viaVehicleRes.data ?? []) as Array<{ company_id: string | null }>)
+          .map((r) => r.company_id)
+          .filter((id): id is string => !!id),
+      ]),
+    );
+
+    if (matchedIds.length === 0) {
+      companies = [];
+    } else {
+      let query = supabase
+        .from('companies')
+        .select('*')
+        .in('id', matchedIds)
+        .order('name');
+      query = showDeleted ? query.eq('is_deleted', true) : query.eq('is_deleted', false);
+      const { data } = await query;
+      companies = (data ?? []) as Company[];
+    }
   }
-  const { data: companiesData } = await query;
-  const companies = (companiesData ?? []) as Company[];
 
   // 거래 건수 (active + pending_review)
   const ids = companies.map((c) => c.id);
@@ -107,7 +139,7 @@ export default async function CompaniesPage({
             <Input
               name="q"
               defaultValue={q}
-              placeholder="거래처명 · 사업자번호 · 담당자 · 연락처 · 주소 · 대표자 · 이메일 · 업태 · 종목"
+              placeholder="거래처명 · 사업자번호 · 담당자 · 연락처 · 주소 · 차량번호 · 대표자 · 이메일 · 업태 · 종목"
               className="max-w-2xl"
             />
             <Button type="submit" variant="outline" size="sm">

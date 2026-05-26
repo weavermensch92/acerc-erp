@@ -79,6 +79,8 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
   );
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<BulkImportResult | null>(null);
+  // 서버에 보낸 validRows[i] 가 화면에서 몇 번 행이었는지(0-base)
+  const [submittedRowIndex, setSubmittedRowIndex] = useState<number[]>([]);
 
   const companyMap = useMemo(
     () => new Map(companies.map((c) => [c.name, c])),
@@ -167,6 +169,11 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
   const handleSave = () => {
     if (validRows.length === 0) return;
     setResult(null);
+    const indexMap: number[] = [];
+    rows.forEach((r, i) => {
+      if (!isRowEmpty(r) && isRowValid(r)) indexMap.push(i);
+    });
+    setSubmittedRowIndex(indexMap);
     const payload: ImportRow[] = validRows.map((r) => {
       const netKg = calcNetWeight(r.weight_total_kg, r.weight_tare_kg);
       const c = calcBilling({
@@ -470,6 +477,21 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
               {result.newPlants} · 현장 {result.newSites}
               {result.failed.length > 0 && ` · 실패 ${result.failed.length}`}
             </p>
+            {result.failed.length > 0 && (
+              <ul className="mt-2 space-y-1 text-[11px]">
+                {result.failed.map((f) => {
+                  const displayRow = (submittedRowIndex[f.index] ?? f.index) + 1;
+                  return (
+                    <li
+                      key={f.index}
+                      className="break-all rounded border border-warning/30 bg-surface/60 px-2 py-1 font-mono text-foreground"
+                    >
+                      {displayRow}행: {f.error}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
             <button
               type="button"
               onClick={() => router.push('/logs')}

@@ -78,7 +78,7 @@ export default async function PendingPage({
     .from('waste_logs')
     .select(
       `id, log_date, weight_kg, unit_price, transport_fee, billing_type,
-       total_amount, vehicle_no, is_invoiced, is_paid,
+       total_amount, vehicle_no, is_invoiced, is_paid, note,
        site_id, waste_type_id,
        company_id, companies(id, name),
        sites(id, name), waste_types(id, name)`,
@@ -101,6 +101,7 @@ export default async function PendingPage({
     vehicle_no: string | null;
     is_invoiced: boolean;
     is_paid: boolean;
+    note: string | null;
     site_id: string | null;
     waste_type_id: string;
     company_id: string;
@@ -177,6 +178,7 @@ export default async function PendingPage({
       site_name: r.sites?.name ?? null,
       waste_type_id: r.waste_type_id,
       waste_type_name: r.waste_types?.name ?? null,
+      note: r.note,
     });
   }
   const groups = [...groupMap.values()].sort((a, b) => b.totalAmount - a.totalAmount);

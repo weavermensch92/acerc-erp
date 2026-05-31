@@ -47,6 +47,7 @@ export interface PendingLogRow {
   site_name: string | null;
   waste_type_id: string;
   waste_type_name: string | null;
+  note: string | null;
 }
 
 export interface CompanyGroup {
@@ -243,6 +244,7 @@ interface EditState {
   vehicle_no: string;
   weight_kg: string;
   unit_price: string;
+  note: string;
 }
 
 function toEditState(l: PendingLogRow): EditState {
@@ -252,6 +254,7 @@ function toEditState(l: PendingLogRow): EditState {
     vehicle_no: l.vehicle_no ?? '',
     weight_kg: l.weight_kg !== null ? String(l.weight_kg) : '',
     unit_price: l.unit_price !== null ? String(l.unit_price) : '',
+    note: l.note ?? '',
   };
 }
 
@@ -261,7 +264,8 @@ function editStatesEqual(a: EditState, b: EditState): boolean {
     a.waste_type_id === b.waste_type_id &&
     a.vehicle_no === b.vehicle_no &&
     a.weight_kg === b.weight_kg &&
-    a.unit_price === b.unit_price
+    a.unit_price === b.unit_price &&
+    a.note === b.note
   );
 }
 
@@ -366,7 +370,7 @@ function LogsTable({
         billing_type: row.billing_type,
         is_invoiced: row.is_invoiced,
         is_paid: row.is_paid,
-        note: null,
+        note: s.note.trim() || null,
         waste_type_id: s.waste_type_id || null,
         site_id: s.site_id || null,
         vehicle_no: s.vehicle_no.trim() || null,
@@ -406,6 +410,7 @@ function LogsTable({
             <th className="px-2 py-1.5 text-right font-medium">중량(kg)</th>
             <th className="px-2 py-1.5 text-right font-medium">단가</th>
             <th className="px-2 py-1.5 text-right font-medium">금액</th>
+            <th className="px-2 py-1.5 text-left font-medium">비고</th>
             <th className="px-2 py-1.5 text-center font-medium">
               {isInbound ? '입금' : '지급'}
             </th>
@@ -505,6 +510,16 @@ function LogsTable({
                   ) : (
                     formatKRW(l.total_amount)
                   )}
+                </td>
+                <td className="px-2 py-1">
+                  <input
+                    type="text"
+                    value={s.note}
+                    onChange={(e) => updateField(l.id, 'note', e.target.value)}
+                    className={editCellInputClass}
+                    placeholder="—"
+                    autoComplete="off"
+                  />
                 </td>
                 <td className="px-2 py-1.5 text-center">
                   {l.is_paid ? (

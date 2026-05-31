@@ -47,6 +47,109 @@ function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => '\\' + m);
 }
 
+// DB/Postgres 원문 에러 → 사용자 친화 메시지 + 조치 안내
+// 빠른입력 화면 결과 박스에서 그대로 노출되므로 한글·간결·실행 가능하게.
+function explainError(
+  raw: string,
+  context: 'company' | 'waste_type' | 'plant' | 'site' | 'log',
+): string {
+  const e = raw.toLowerCase();
+
+  // 1) Unique 충돌 — 이름 마스터에 같은 항목 존재
+  if (
+    e.includes('duplicate key') ||
+    e.includes('uniq_') ||
+    e.includes('_name_key') ||
+    (e.includes('violates') && e.includes('unique'))
+  ) {
+    switch (context) {
+      case 'company':
+        return '같은 이름의 거래처가 이미 등록되어 있습니다. 거래처 마스터에서 정확한 표기(앞뒤 공백·대소문자)를 확인해 동일하게 입력해주세요.';
+      case 'waste_type':
+        return '같은 이름의 성상이 이미 등록되어 있습니다. 성상 마스터에서 정확한 표기를 확인해주세요.';
+      case 'plant':
+        return '같은 이름의 처리장이 이미 등록되어 있습니다. 처리장 마스터에서 정확한 표기를 확인해주세요.';
+      case 'site':
+        return '해당 거래처에 같은 이름의 현장이 이미 등록되어 있습니다.';
+      default:
+        return '이미 등록된 항목과 충돌합니다.';
+    }
+  }
+
+  // 2) Foreign Key — 참조 항목 누락 (자동등록 실패 시)
+  if (e.includes('foreign key') || e.includes('not present in table')) {
+    if (e.includes('company_id'))
+      return '거래처를 찾을 수 없습니다 — 거래처 마스터에서 먼저 등록한 뒤 재시도해주세요.';
+    if (e.includes('waste_type_id'))
+      return '성상을 찾을 수 없습니다 — 성상 마스터에서 먼저 등록한 뒤 재시도해주세요.';
+    if (e.includes('treatment_plant_id'))
+      return '처리장을 찾을 수 없습니다 — 처리장 마스터에서 먼저 등록한 뒤 재시도해주세요.';
+    if (e.includes('site_id'))
+      return '현장을 찾을 수 없습니다 — 거래처에 해당 현장을 먼저 등록한 뒤 재시도해주세요.';
+    return '참조 항목이 존재하지 않습니다 — 마스터를 다시 확인해주세요.';
+  }
+
+  // 3) Check constraint — 허용되지 않은 값
+  if (e.includes('violates check constraint') || e.includes('_check')) {
+    if (e.includes('direction')) return "'구분' 은 반입/반출만 가능합니다.";
+    if (e.includes('billing_type'))
+      return '청구 타입이 허용 범위를 벗어났습니다 (빠른입력은 weight_based 전용).';
+    if (e.includes('status')) return '상태 값이 잘못되었습니다.';
+    return '허용되지 않은 값이 포함되었습니다.';
+  }
+
+  // 4) NOT NULL — 필수값 누락
+  if (e.includes('null value') || e.includes('violates not-null')) {
+    return '필수값(일자·구분·거래처·성상)이 누락되었습니다.';
+  }
+
+  // 5) 숫자 한도 초과
+  if (e.includes('numeric field overflow')) {
+    return '중량 값이 너무 큽니다. 총중량·공차중량은 99,999,999.99kg 이하로 입력해주세요.';
+  }
+  if (e.includes('out of range') || e.includes('integer out of range')) {
+    return '단가·운반비·청구금액이 정수 한도(약 21억원)를 넘었습니다. 금액을 점검해주세요.';
+  }
+
+  // 6) 형식 오류
+  if (e.includes('invalid input syntax for type date')) {
+    return '일자 형식이 잘못되었습니다 (YYYY-MM-DD).';
+  }
+  if (e.includes('invalid input syntax for type numeric') || e.includes('invalid input syntax for type integer')) {
+    return '숫자 칸에 숫자가 아닌 문자가 포함되었습니다.';
+  }
+
+  // 7) 텍스트 길이 초과
+  if (e.includes('value too long')) {
+    return '입력한 값이 컬럼 최대 길이를 초과했습니다.';
+  }
+
+  // 8) 권한/RLS
+  if (
+    e.includes('row-level security') ||
+    e.includes('row level security') ||
+    e.includes('permission denied') ||
+    e.includes('jwt') ||
+    e.includes('insufficient_privilege')
+  ) {
+    return '로그인 세션이 만료됐을 수 있습니다 — 로그아웃 후 재로그인 후 다시 시도해주세요.';
+  }
+
+  // 9) 네트워크/타임아웃
+  if (
+    e.includes('fetch failed') ||
+    e.includes('network') ||
+    e.includes('econn') ||
+    e.includes('etimedout') ||
+    e.includes('timeout')
+  ) {
+    return '네트워크 오류로 저장이 끊겼습니다 — 잠시 후 다시 저장해주세요.';
+  }
+
+  // 10) 그 외 — 원문 노출 (관리자 문의 가이드)
+  return `예상치 못한 오류: ${raw}. 동일 증상 반복 시 관리자에게 문의해주세요.`;
+}
+
 async function resolveByName(
   supabase: SupabaseClient,
   table: 'companies' | 'waste_types' | 'treatment_plants',
@@ -255,14 +358,14 @@ export async function bulkImportLogsAction(rows: ImportRow[]): Promise<BulkImpor
     if (!companyId) {
       failed.push({
         index: idx,
-        error: `거래처 등록 실패 (${cName}): ${companyErr.get(cName) ?? '확인 필요'}`,
+        error: `거래처 "${cName}" 자동 등록 실패 — ${explainError(companyErr.get(cName) ?? '', 'company')}`,
       });
       return;
     }
     if (!wasteTypeId) {
       failed.push({
         index: idx,
-        error: `성상 등록 실패 (${wName}): ${wasteTypeErr.get(wName) ?? '확인 필요'}`,
+        error: `성상 "${wName}" 자동 등록 실패 — ${explainError(wasteTypeErr.get(wName) ?? '', 'waste_type')}`,
       });
       return;
     }
@@ -273,7 +376,7 @@ export async function bulkImportLogsAction(rows: ImportRow[]): Promise<BulkImpor
       if (!found) {
         failed.push({
           index: idx,
-          error: `처리장 등록 실패 (${pName}): ${plantErr.get(pName) ?? '확인 필요'}`,
+          error: `처리장 "${pName}" 자동 등록 실패 — ${explainError(plantErr.get(pName) ?? '', 'plant')}`,
         });
         return;
       }
@@ -287,7 +390,7 @@ export async function bulkImportLogsAction(rows: ImportRow[]): Promise<BulkImpor
       if (!found) {
         failed.push({
           index: idx,
-          error: `현장 등록 실패 (${sName}): ${siteErr.get(key) ?? '확인 필요'}`,
+          error: `현장 "${sName}" 자동 등록 실패 — ${explainError(siteErr.get(key) ?? '', 'site')}`,
         });
         return;
       }
@@ -337,7 +440,7 @@ export async function bulkImportLogsAction(rows: ImportRow[]): Promise<BulkImpor
           .insert(item.payload)
           .select('id');
         if (oneErr) {
-          failed.push({ index: item.rowIndex, error: oneErr.message });
+          failed.push({ index: item.rowIndex, error: explainError(oneErr.message, 'log') });
         } else {
           inserted += one?.length ?? 0;
         }

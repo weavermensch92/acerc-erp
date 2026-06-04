@@ -6,6 +6,7 @@ import {
   Home,
   List,
   Users,
+  MapPin,
   Receipt,
   CreditCard,
   Database,
@@ -26,6 +27,7 @@ const navItems = [
   { id: 'dashboard', label: '대시보드', href: '/dashboard', icon: Home, enabled: true },
   { id: 'logs', label: '폐기물일보', href: '/logs', icon: List, enabled: true, hasBadge: true },
   { id: 'companies', label: '거래처', href: '/companies', icon: Users, enabled: true },
+  { id: 'sites', label: '현장 관리', href: '/sites', icon: MapPin, enabled: true },
   { id: 'invoices', label: '거래명세표', href: '/invoices', icon: Receipt, enabled: true },
   { id: 'payouts', label: '지급관리', href: '/payouts', icon: CreditCard, enabled: true },
   { id: 'masters', label: '마스터', href: '/masters', icon: Database, enabled: true },
@@ -38,6 +40,7 @@ function detectActive(pathname: string): string | null {
   if (pathname.startsWith('/invoices')) return 'invoices';
   if (pathname.startsWith('/payouts')) return 'payouts';
   if (pathname.startsWith('/companies')) return 'companies';
+  if (pathname.startsWith('/sites')) return 'sites';
   if (pathname.startsWith('/masters')) return 'masters';
   if (pathname.startsWith('/dashboard')) return 'dashboard';
   if (pathname.startsWith('/logs')) return 'logs';

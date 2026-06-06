@@ -189,6 +189,31 @@ async function resolveByName(
     if (hit) return { ok: true, id: hit.id, created: false };
   }
 
+  // 2.5) companies 전용 — 활성 매칭이 없으면 INSERT 전에 '삭제된 동명 거래처'를 복원·재사용.
+  //      (삭제된 거래처를 못 보고 매번 새로 만들어 동명 거래처가 쌓이던 문제 차단)
+  if (table === 'companies') {
+    const { data: deletedRows } = await supabase
+      .from('companies')
+      .select('id, name')
+      .ilike('name', `%${escapeLike(trimmed)}%`)
+      .eq('is_deleted', true)
+      .order('created_at', { ascending: true })
+      .limit(50);
+    const hit = (deletedRows ?? []).find(
+      (r) => (r.name as string).trim().toLowerCase() === target,
+    );
+    if (hit) {
+      const { error: restoreErr } = await supabase
+        .from('companies')
+        .update({ is_deleted: false, deleted_at: null })
+        .eq('id', hit.id as string);
+      // 복원 성공 시 재사용. 실패(예: 다른 활성 동명과 unique 충돌)하면 아래 INSERT/재조회로 흡수.
+      if (!restoreErr) {
+        return { ok: true, id: hit.id as string, created: false };
+      }
+    }
+  }
+
   // 3) INSERT 시도
   const { data: created, error } = await supabase
     .from(table)

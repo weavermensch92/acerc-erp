@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { CompanyForm } from '@/components/erp/CompanyForm';
 import { ShareTokenPanel } from '@/components/erp/ShareTokenPanel';
 import { DeleteCompanyButton } from '@/components/erp/DeleteCompanyButton';
+import { MergeCompanyButton } from '@/components/erp/MergeCompanyButton';
 import { createClient } from '@/lib/supabase/server';
 import { formatKRW, formatKg, formatDate } from '@/lib/format';
 import type { Company, Site, Direction } from '@/lib/types/database';
@@ -30,7 +31,7 @@ export default async function CompanyDetailPage({
 }) {
   const supabase = createClient();
 
-  const [companyRes, sitesRes, recentRes, totalRes] = await Promise.all([
+  const [companyRes, sitesRes, recentRes, totalRes, candidatesRes] = await Promise.all([
     supabase.from('companies').select('*').eq('id', params.id).maybeSingle(),
     supabase
       .from('sites')
@@ -52,6 +53,13 @@ export default async function CompanyDetailPage({
       .select('total_amount, is_paid, direction', { count: 'exact' })
       .eq('company_id', params.id)
       .neq('status', 'archived'),
+    // 병합 대상 후보 — 활성 거래처 (자기 자신 제외)
+    supabase
+      .from('companies')
+      .select('id, name, business_no')
+      .eq('is_deleted', false)
+      .neq('id', params.id)
+      .order('name'),
   ]);
 
   if (!companyRes.data) notFound();
@@ -62,6 +70,11 @@ export default async function CompanyDetailPage({
     total_amount: number | null;
     is_paid: boolean;
     direction: Direction;
+  }>;
+  const mergeCandidates = (candidatesRes.data ?? []) as Array<{
+    id: string;
+    name: string;
+    business_no: string | null;
   }>;
   const inRows = totalRows.filter((r) => r.direction === 'in');
   const outRows = totalRows.filter((r) => r.direction === 'out');
@@ -270,6 +283,12 @@ export default async function CompanyDetailPage({
                 isDeleted={company.is_deleted}
                 hasShareToken={!!company.share_token}
                 logCount={totals.count}
+              />
+
+              <MergeCompanyButton
+                companyId={company.id}
+                companyName={company.name}
+                candidates={mergeCandidates}
               />
             </div>
           </aside>

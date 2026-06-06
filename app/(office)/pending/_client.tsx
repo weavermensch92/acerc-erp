@@ -244,6 +244,7 @@ interface EditState {
   vehicle_no: string;
   weight_kg: string;
   unit_price: string;
+  transport_fee: string;
   note: string;
 }
 
@@ -254,6 +255,7 @@ function toEditState(l: PendingLogRow): EditState {
     vehicle_no: l.vehicle_no ?? '',
     weight_kg: l.weight_kg !== null ? String(l.weight_kg) : '',
     unit_price: l.unit_price !== null ? String(l.unit_price) : '',
+    transport_fee: l.transport_fee !== null ? String(l.transport_fee) : '',
     note: l.note ?? '',
   };
 }
@@ -265,6 +267,7 @@ function editStatesEqual(a: EditState, b: EditState): boolean {
     a.vehicle_no === b.vehicle_no &&
     a.weight_kg === b.weight_kg &&
     a.unit_price === b.unit_price &&
+    a.transport_fee === b.transport_fee &&
     a.note === b.note
   );
 }
@@ -366,7 +369,7 @@ function LogsTable({
         id,
         weight_kg: s.weight_kg ? Number(s.weight_kg) : null,
         unit_price: s.unit_price ? Number(s.unit_price) : null,
-        transport_fee: row.transport_fee ?? 0,
+        transport_fee: s.transport_fee ? Number(s.transport_fee) : 0,
         billing_type: row.billing_type,
         is_invoiced: row.is_invoiced,
         is_paid: row.is_paid,
@@ -409,6 +412,7 @@ function LogsTable({
             <th className="px-2 py-1.5 text-left font-medium">차량</th>
             <th className="px-2 py-1.5 text-right font-medium">중량(kg)</th>
             <th className="px-2 py-1.5 text-right font-medium">단가</th>
+            <th className="px-2 py-1.5 text-right font-medium">운반비</th>
             <th className="px-2 py-1.5 text-right font-medium">금액</th>
             <th className="px-2 py-1.5 text-left font-medium">비고</th>
             <th className="px-2 py-1.5 text-center font-medium">
@@ -425,7 +429,7 @@ function LogsTable({
               billingType: l.billing_type,
               weightKg: s.weight_kg ? Number(s.weight_kg) : 0,
               unitPrice: s.unit_price ? Number(s.unit_price) : 0,
-              transportFee: l.transport_fee ?? 0,
+              transportFee: s.transport_fee ? Number(s.transport_fee) : 0,
             });
             return (
               <tr
@@ -500,6 +504,15 @@ function LogsTable({
                     type="text"
                     value={s.unit_price}
                     onChange={(e) => updateField(l.id, 'unit_price', e.target.value)}
+                    className={cn(editCellInputClass, 'text-right font-mono')}
+                    autoComplete="off"
+                  />
+                </td>
+                <td className="px-2 py-1">
+                  <input
+                    type="text"
+                    value={s.transport_fee}
+                    onChange={(e) => updateField(l.id, 'transport_fee', e.target.value)}
                     className={cn(editCellInputClass, 'text-right font-mono')}
                     autoComplete="off"
                   />

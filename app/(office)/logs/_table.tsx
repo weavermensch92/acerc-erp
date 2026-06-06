@@ -81,7 +81,7 @@ export interface LogRow {
   is_paid: boolean;
   note: string | null;
   companies: { id: string; name: string } | null;
-  sites: { name: string } | null;
+  sites: { id: string; name: string } | null;
   waste_types: { id: string; name: string } | null;
 }
 
@@ -93,6 +93,7 @@ interface RowState {
   is_invoiced: boolean;
   is_paid: boolean;
   waste_type_id: string;
+  site_id: string;
   vehicle_no: string;
 }
 
@@ -105,6 +106,7 @@ function toRowState(row: LogRow): RowState {
     is_invoiced: row.is_invoiced,
     is_paid: row.is_paid,
     waste_type_id: row.waste_types?.id ?? '',
+    site_id: row.sites?.id ?? '',
     vehicle_no: row.vehicle_no ?? '',
   };
 }
@@ -119,6 +121,7 @@ function statesEqual(a: RowState | undefined, b: RowState | undefined): boolean 
     a.is_invoiced === b.is_invoiced &&
     a.is_paid === b.is_paid &&
     a.waste_type_id === b.waste_type_id &&
+    a.site_id === b.site_id &&
     a.vehicle_no === b.vehicle_no
   );
 }
@@ -191,6 +194,7 @@ export function LogsTable({ rows, sitesByCompany = {}, wasteTypes = [] }: Props)
         is_paid: s.is_paid,
         note: s.note.trim() || null,
         waste_type_id: s.waste_type_id || null,
+        site_id: s.site_id || null,
         vehicle_no: s.vehicle_no.trim() || null,
       };
     });
@@ -504,8 +508,32 @@ function Row({
           '—'
         )}
       </TableCell>
-      <TableCell className="text-foreground-secondary">
-        {wrap(row.sites?.name ?? '—')}
+      <TableCell
+        className="text-foreground-secondary"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <select
+          value={state.site_id}
+          onChange={(e) => onChange('site_id', e.target.value)}
+          disabled={isArchived}
+          className={cn(
+            'h-7 w-full rounded border border-transparent bg-transparent px-1.5 text-xs',
+            'focus:border-foreground focus:bg-surface focus:outline-none focus:ring-1 focus:ring-foreground/30',
+            'hover:border-border',
+            isArchived && 'cursor-not-allowed opacity-50',
+          )}
+        >
+          <option value="">—</option>
+          {/* 현재 행에 매핑된 현장이 마스터 active 목록에 없을 수 있어 보존 옵션 추가 */}
+          {row.sites && !sites.some((x) => x.id === row.sites!.id) && (
+            <option value={row.sites.id}>{row.sites.name}</option>
+          )}
+          {sites.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.name}
+            </option>
+          ))}
+        </select>
       </TableCell>
       <TableCell
         className="text-foreground-secondary"

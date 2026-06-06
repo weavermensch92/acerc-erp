@@ -87,7 +87,7 @@ export default async function LogsPage({
        weight_kg, unit_price, transport_fee, billing_type,
        supply_amount, vat, total_amount,
        status, is_invoiced, is_paid, note,
-       companies(id, name), sites(name), waste_types(id, name)`,
+       companies(id, name), sites(id, name), waste_types(id, name)`,
     )
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: false })

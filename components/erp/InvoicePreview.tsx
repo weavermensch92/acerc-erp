@@ -143,12 +143,12 @@ export function InvoicePreview({
                   운반비
                 </th>
                 <th className="border-r border-foreground p-1.5 text-center print:border-black">
-                  공급가액
+                  총공급가액
                 </th>
                 <th className="border-r border-foreground p-1.5 text-center print:border-black">
                   부가세
                 </th>
-                <th className="p-1.5 text-center">청구금액</th>
+                <th className="p-1.5 text-center">부가세포함(청구금액)</th>
               </tr>
             </thead>
             <tbody>
@@ -197,7 +197,7 @@ export function InvoicePreview({
                         {transportFee > 0 ? formatNumber(transportFee) : '—'}
                       </td>
                       <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
-                        {formatNumber(goodsSupply)}
+                        {formatNumber(supplyTotal)}
                       </td>
                       <td className="border-r border-divider p-1.5 text-right font-mono print:border-gray-300">
                         {formatNumber(row.vat)}
@@ -227,7 +227,7 @@ export function InvoicePreview({
                     {totals.transport > 0 ? formatNumber(totals.transport) : '—'}
                   </td>
                   <td className="border-r border-foreground p-1.5 text-right font-mono font-semibold print:border-black">
-                    {formatNumber(totals.goodsSupply)}
+                    {formatNumber(totals.supply)}
                   </td>
                   <td className="border-r border-foreground p-1.5 text-right font-mono font-semibold print:border-black">
                     {formatNumber(totals.vat)}
@@ -243,9 +243,9 @@ export function InvoicePreview({
 
         {/* 합계 박스 */}
         <div className="mt-4 grid grid-cols-3 gap-3 text-xs">
-          <SummaryBox label="공급가액" value={formatKRW(totals.supply)} />
+          <SummaryBox label="총공급가액" value={formatKRW(totals.supply)} />
           <SummaryBox label="부가세" value={formatKRW(totals.vat)} />
-          <SummaryBox label="청구금액 (합계)" value={formatKRW(totals.total)} primary />
+          <SummaryBox label="부가세포함(청구금액)" value={formatKRW(totals.total)} primary />
         </div>
 
         {totals.unpaidTotal > 0 && (

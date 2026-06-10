@@ -38,7 +38,7 @@ interface InvoiceExcelInput {
 }
 
 const directionLabel: Record<string, string> = { in: '반입', out: '반출' };
-const NCOL = 11; // 일자/구분/현장/성상/차량/중량/단가/운반비/공급가액/부가세/청구금액
+const NCOL = 11; // 일자/구분/현장/성상/차량/중량/단가/운반비/총공급가액/부가세/부가세포함(청구금액)
 
 export function buildInvoiceWorkbook({
   company,
@@ -145,9 +145,9 @@ export function buildInvoiceWorkbook({
     '중량(kg)',
     '단가(원)',
     '운반비',
-    '공급가액',
+    '총공급가액',
     '부가세',
-    '청구금액',
+    '부가세포함(청구금액)',
   ]);
   stl(tableHeaderRow, 0, tableHeaderRow, NCOL - 1, STYLE_TABLE_HEADER);
 
@@ -182,7 +182,7 @@ export function buildInvoiceWorkbook({
         log.weight_kg ?? null,
         log.unit_price ?? null,
         transportFee > 0 ? transportFee : null,
-        goodsSupply,
+        supplyTotal,
         log.vat ?? null,
         log.total_amount ?? null,
       ]);
@@ -217,7 +217,7 @@ export function buildInvoiceWorkbook({
       totals.weight,
       null,
       totals.transport > 0 ? totals.transport : null,
-      totals.goods,
+      totals.supply,
       totals.vat,
       totals.total,
     ]);
@@ -227,10 +227,10 @@ export function buildInvoiceWorkbook({
 
     push([]);
 
-    // 합계 박스 — 공급가액(자재+운반비) / 부가세 / 청구금액 (3 박스)
+    // 합계 박스 — 총공급가액(운반비+공급가액) / 부가세 / 부가세포함(청구금액) (3 박스)
     summaryStartRow = r;
     row = push([
-      '공급가액',
+      '총공급가액',
       totals.supply,
       null,
       null,
@@ -238,7 +238,7 @@ export function buildInvoiceWorkbook({
       totals.vat,
       null,
       null,
-      '청구금액 (합계)',
+      '부가세포함(청구금액)',
       totals.total,
       null,
     ]);

@@ -318,6 +318,8 @@ export function LogsTable({ rows, sitesByCompany = {}, wasteTypes = [] }: Props)
               <TableHead className="text-right">중량(kg)</TableHead>
               <TableHead className="text-right">단가</TableHead>
               <TableHead className="text-right">운반비</TableHead>
+              <TableHead className="text-right">공급가</TableHead>
+              <TableHead className="text-right">부가세</TableHead>
               <TableHead className="text-right">청구금액</TableHead>
               <TableHead>비고</TableHead>
               <TableHead>문서</TableHead>
@@ -590,6 +592,20 @@ function Row({
         mono
         disabled={isArchived}
       />
+      <TableCell className="text-right font-mono text-xs">
+        {isDirty ? (
+          <span className="text-warning">{formatKRW(calc.supplyAmount)}</span>
+        ) : (
+          formatKRW(row.supply_amount)
+        )}
+      </TableCell>
+      <TableCell className="text-right font-mono text-xs">
+        {isDirty ? (
+          <span className="text-warning">{formatKRW(calc.vat)}</span>
+        ) : (
+          formatKRW(row.vat)
+        )}
+      </TableCell>
       <TableCell className="text-right font-mono text-xs">
         {isDirty ? (
           <span className="text-warning">{formatKRW(calc.totalAmount)}</span>

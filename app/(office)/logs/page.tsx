@@ -673,6 +673,7 @@ export default async function LogsPage({
           ) : (
             <LogsTable
               rows={rows}
+              companies={companies}
               sitesByCompany={sitesByCompany}
               wasteTypes={wasteTypes}
             />

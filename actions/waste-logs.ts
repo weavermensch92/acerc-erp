@@ -366,6 +366,21 @@ export async function bulkUpdateLogsInlineAction(
   return { ok: failed.length === 0, updated, failed };
 }
 
+// 단일 행 거래처 변경 — 인라인 확인 모달 후 즉시 저장용. site_id 는 초기화.
+export async function updateLogCompanyAction(
+  id: string,
+  companyId: string,
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('waste_logs')
+    .update({ company_id: companyId, site_id: null })
+    .eq('id', id);
+  if (error) return { error: error.message };
+  revalidateAllAffectedByLog();
+  return {};
+}
+
 // 단일 행 청구/결재 플래그 토글 — /logs 표 pill 클릭 즉시 저장용.
 export async function toggleLogFlagAction(
   id: string,

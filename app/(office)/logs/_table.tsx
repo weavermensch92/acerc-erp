@@ -29,6 +29,7 @@ import {
   bulkArchiveLogsAction,
   bulkUpdateLogsInlineAction,
   toggleLogFlagAction,
+  updateLogCompanyAction,
   type InlineRowUpdate,
   type BulkUpdateResult,
 } from '@/actions/waste-logs';
@@ -128,11 +129,12 @@ function statesEqual(a: RowState | undefined, b: RowState | undefined): boolean 
 
 interface Props {
   rows: LogRow[];
+  companies?: Array<{ id: string; name: string }>;
   sitesByCompany?: Record<string, Array<{ id: string; name: string }>>;
   wasteTypes?: Array<{ id: string; name: string }>;
 }
 
-export function LogsTable({ rows, sitesByCompany = {}, wasteTypes = [] }: Props) {
+export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteTypes = [] }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -318,6 +320,8 @@ export function LogsTable({ rows, sitesByCompany = {}, wasteTypes = [] }: Props)
               <TableHead className="text-right">중량(kg)</TableHead>
               <TableHead className="text-right">단가</TableHead>
               <TableHead className="text-right">운반비</TableHead>
+              <TableHead className="text-right">공급가</TableHead>
+              <TableHead className="text-right">부가세</TableHead>
               <TableHead className="text-right">청구금액</TableHead>
               <TableHead>비고</TableHead>
               <TableHead>문서</TableHead>
@@ -334,6 +338,7 @@ export function LogsTable({ rows, sitesByCompany = {}, wasteTypes = [] }: Props)
                   key={row.id}
                   row={row}
                   state={s}
+                  companies={companies}
                   sites={sites}
                   wasteTypes={wasteTypes}
                   isDirty={!statesEqual(s, initial[row.id])}
@@ -432,6 +437,7 @@ export function LogsTable({ rows, sitesByCompany = {}, wasteTypes = [] }: Props)
 function Row({
   row,
   state,
+  companies,
   sites,
   wasteTypes,
   isDirty,
@@ -442,6 +448,7 @@ function Row({
 }: {
   row: LogRow;
   state: RowState;
+  companies: Array<{ id: string; name: string }>;
   sites: Array<{ id: string; name: string }>;
   wasteTypes: Array<{ id: string; name: string }>;
   isDirty: boolean;
@@ -497,16 +504,12 @@ function Row({
         className="font-medium"
         onClick={(e) => e.stopPropagation()}
       >
-        {row.companies ? (
-          <CompanySiteMenu
-            companyId={row.companies.id}
-            companyName={row.companies.name}
-            logDate={row.log_date}
-            sites={sites}
-          />
-        ) : (
-          '—'
-        )}
+        <CompanyEditor
+          logId={row.id}
+          currentCompany={row.companies ?? null}
+          companies={companies}
+          disabled={isArchived}
+        />
       </TableCell>
       <TableCell
         className="text-foreground-secondary"
@@ -590,6 +593,20 @@ function Row({
         mono
         disabled={isArchived}
       />
+      <TableCell className="text-right font-mono text-xs">
+        {isDirty ? (
+          <span className="text-warning">{formatKRW(calc.supplyAmount)}</span>
+        ) : (
+          formatKRW(row.supply_amount)
+        )}
+      </TableCell>
+      <TableCell className="text-right font-mono text-xs">
+        {isDirty ? (
+          <span className="text-warning">{formatKRW(calc.vat)}</span>
+        ) : (
+          formatKRW(row.vat)
+        )}
+      </TableCell>
       <TableCell className="text-right font-mono text-xs">
         {isDirty ? (
           <span className="text-warning">{formatKRW(calc.totalAmount)}</span>
@@ -734,6 +751,147 @@ function FlagToggle({
     >
       <Pill tone={value ? 'info' : 'danger'}>{value ? labelOn : labelOff}</Pill>
     </button>
+  );
+}
+
+// 거래처 인라인 편집 — 클릭 시 autocomplete, 선택 시 확인 모달 후 즉시 저장
+function CompanyEditor({
+  logId,
+  currentCompany,
+  companies,
+  disabled,
+}: {
+  logId: string;
+  currentCompany: { id: string; name: string } | null;
+  companies: Array<{ id: string; name: string }>;
+  disabled: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [query, setQuery] = useState('');
+  const [pendingCompany, setPendingCompany] = useState<{ id: string; name: string } | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [optimistic, setOptimistic] = useState(currentCompany);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const filtered = query.trim()
+    ? companies.filter((c) => c.name.includes(query.trim()))
+    : companies;
+
+  useEffect(() => {
+    if (editing) {
+      setQuery('');
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [editing]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setEditing(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [editing]);
+
+  const handleConfirm = () => {
+    if (!pendingCompany) return;
+    const next = pendingCompany;
+    setOptimistic(next);
+    setPendingCompany(null);
+    setEditing(false);
+    startTransition(async () => {
+      const r = await updateLogCompanyAction(logId, next.id);
+      if (r.error) setOptimistic(currentCompany);
+    });
+  };
+
+  if (disabled) {
+    return <span className="text-xs">{optimistic?.name ?? '—'}</span>;
+  }
+
+  return (
+    <>
+      <div ref={containerRef} className="relative">
+        {editing ? (
+          <>
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="거래처 검색..."
+              className="h-7 w-full rounded border border-foreground bg-surface px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+            />
+            {filtered.length > 0 && (
+              <div className="absolute left-0 top-full z-40 mt-0.5 max-h-48 w-48 overflow-y-auto rounded-md border border-border bg-surface py-1 shadow-lg">
+                {filtered.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (c.id !== (optimistic?.id ?? '')) {
+                        setPendingCompany(c);
+                        setEditing(false);
+                      } else {
+                        setEditing(false);
+                      }
+                    }}
+                    className="block w-full px-3 py-1.5 text-left text-xs hover:bg-background-subtle"
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            disabled={pending}
+            className="text-left text-xs font-medium text-foreground hover:underline disabled:opacity-60"
+          >
+            {optimistic?.name ?? '—'}
+          </button>
+        )}
+      </div>
+
+      {/* 확인 모달 */}
+      <Modal
+        open={!!pendingCompany}
+        onClose={() => setPendingCompany(null)}
+        title="거래처 변경"
+        description={`거래처를 변경하면 현장 정보가 초기화됩니다.`}
+      >
+        <div className="space-y-4">
+          <div className="rounded-md bg-background-subtle px-3 py-2.5 text-sm">
+            <span className="text-foreground-muted">{optimistic?.name ?? '—'}</span>
+            <span className="mx-2 text-foreground-muted">→</span>
+            <span className="font-semibold">{pendingCompany?.name}</span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPendingCompany(null)}
+              className="flex-1 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-background-subtle"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              className="flex-1 rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:opacity-90"
+            >
+              변경
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 

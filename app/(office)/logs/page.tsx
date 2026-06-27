@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createClient } from '@/lib/supabase/server';
 import { getReviewProcessEnabled } from '@/lib/settings';
+import { formatKRW, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { LogsTable, type LogRow } from './_table';
 import { LogCompanyFilter } from './_company-filter';
@@ -631,6 +632,33 @@ export default async function LogsPage({
             )}
           </div>
         </div>
+
+        {rows.length > 0 && (() => {
+          const totalCompanies = new Set(
+            rows.map((r) => r.companies?.id).filter((id): id is string => !!id),
+          ).size;
+          const totalWeight = rows.reduce((s, r) => s + Number(r.weight_kg ?? 0), 0);
+          const totalAmount = rows.reduce((s, r) => s + Number(r.total_amount ?? 0), 0);
+          return (
+            <div className="flex flex-shrink-0 items-center gap-6 border-b border-border bg-background-subtle px-7 py-2.5 text-xs">
+              <span className="text-foreground-muted">요약</span>
+              <span>
+                <span className="text-foreground-muted">총 업체</span>{' '}
+                <span className="font-mono font-semibold">{totalCompanies}</span>
+                <span className="text-foreground-muted">개</span>
+              </span>
+              <span>
+                <span className="text-foreground-muted">총 중량</span>{' '}
+                <span className="font-mono font-semibold">{formatNumber(totalWeight)}</span>
+                <span className="text-foreground-muted"> kg</span>
+              </span>
+              <span>
+                <span className="text-foreground-muted">총 매출</span>{' '}
+                <span className="font-mono font-semibold">{formatKRW(totalAmount)}</span>
+              </span>
+            </div>
+          );
+        })()}
 
         <div className="flex-1 overflow-y-auto p-7">
           {view === 'daily' && rows.length === 0 ? (

@@ -634,27 +634,52 @@ export default async function LogsPage({
         </div>
 
         {rows.length > 0 && (() => {
-          const totalCompanies = new Set(
-            rows.map((r) => r.companies?.id).filter((id): id is string => !!id),
-          ).size;
-          const totalWeight = rows.reduce((s, r) => s + Number(r.weight_kg ?? 0), 0);
-          const totalAmount = rows.reduce((s, r) => s + Number(r.total_amount ?? 0), 0);
+          const inRows  = rows.filter((r) => r.direction === 'in');
+          const outRows = rows.filter((r) => r.direction === 'out');
+          const inWeight  = inRows.reduce((s, r)  => s + Number(r.weight_kg    ?? 0), 0);
+          const outWeight = outRows.reduce((s, r) => s + Number(r.weight_kg    ?? 0), 0);
+          const inAmount  = inRows.reduce((s, r)  => s + Number(r.total_amount ?? 0), 0);
+          const outAmount = outRows.reduce((s, r) => s + Number(r.total_amount ?? 0), 0);
           return (
-            <div className="flex flex-shrink-0 items-center gap-6 border-b border-border bg-background-subtle px-7 py-2.5 text-xs">
+            <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1.5 border-b border-border bg-background-subtle px-7 py-2.5 text-xs">
               <span className="text-foreground-muted">요약</span>
-              <span>
-                <span className="text-foreground-muted">총 업체</span>{' '}
-                <span className="font-mono font-semibold">{totalCompanies}</span>
-                <span className="text-foreground-muted">개</span>
+
+              {/* 파트 1 — 건수 */}
+              <span className="flex items-center gap-1.5">
+                <span className="text-foreground-muted">반입</span>
+                <span className="font-mono font-semibold">{inRows.length}</span>
+                <span className="text-foreground-muted">건</span>
+                <span className="text-foreground-dim">·</span>
+                <span className="text-foreground-muted">반출</span>
+                <span className="font-mono font-semibold">{outRows.length}</span>
+                <span className="text-foreground-muted">건</span>
+                <span className="rounded-full bg-border px-1.5 py-0.5 font-mono text-foreground-muted">
+                  계 {rows.length}건
+                </span>
               </span>
-              <span>
-                <span className="text-foreground-muted">총 중량</span>{' '}
-                <span className="font-mono font-semibold">{formatNumber(totalWeight)}</span>
-                <span className="text-foreground-muted"> kg</span>
+
+              <span className="h-3 w-px bg-border" />
+
+              {/* 파트 2 — 중량 */}
+              <span className="flex items-center gap-1.5">
+                <span className="text-foreground-muted">반입중량</span>
+                <span className="font-mono font-semibold">{formatNumber(inWeight)}</span>
+                <span className="text-foreground-muted">kg</span>
+                <span className="text-foreground-dim">·</span>
+                <span className="text-foreground-muted">반출중량</span>
+                <span className="font-mono font-semibold">{formatNumber(outWeight)}</span>
+                <span className="text-foreground-muted">kg</span>
               </span>
-              <span>
-                <span className="text-foreground-muted">총 매출</span>{' '}
-                <span className="font-mono font-semibold">{formatKRW(totalAmount)}</span>
+
+              <span className="h-3 w-px bg-border" />
+
+              {/* 파트 3 — 금액 */}
+              <span className="flex items-center gap-1.5">
+                <span className="text-foreground-muted">매출(반입)</span>
+                <span className="font-mono font-semibold">{formatKRW(inAmount)}</span>
+                <span className="text-foreground-dim">·</span>
+                <span className="text-foreground-muted">매입(반출)</span>
+                <span className="font-mono font-semibold">{formatKRW(outAmount)}</span>
               </span>
             </div>
           );

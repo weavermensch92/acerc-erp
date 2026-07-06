@@ -662,11 +662,15 @@ export default async function LogsPage({
 
               {/* 파트 2 — 중량 */}
               <span className="flex items-center gap-1.5">
-                <span className="text-foreground-muted">반입중량</span>
+                <span className="text-foreground-muted">총중량</span>
+                <span className="font-mono font-semibold">{formatNumber(inWeight + outWeight)}</span>
+                <span className="text-foreground-muted">kg</span>
+                <span className="text-foreground-dim">·</span>
+                <span className="text-foreground-muted">반입</span>
                 <span className="font-mono font-semibold">{formatNumber(inWeight)}</span>
                 <span className="text-foreground-muted">kg</span>
                 <span className="text-foreground-dim">·</span>
-                <span className="text-foreground-muted">반출중량</span>
+                <span className="text-foreground-muted">반출</span>
                 <span className="font-mono font-semibold">{formatNumber(outWeight)}</span>
                 <span className="text-foreground-muted">kg</span>
               </span>

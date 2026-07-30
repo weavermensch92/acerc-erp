@@ -381,6 +381,24 @@ export async function updateLogCompanyAction(
   return {};
 }
 
+// 단일 행 일자 변경 — /logs 표 일자 셀 클릭 인라인 편집 즉시 저장용.
+export async function updateLogDateAction(
+  id: string,
+  logDate: string,
+): Promise<ActionResult> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
+    return { error: '일자는 YYYY-MM-DD 형식이어야 합니다' };
+  }
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('waste_logs')
+    .update({ log_date: logDate })
+    .eq('id', id);
+  if (error) return { error: error.message };
+  revalidateAllAffectedByLog(id);
+  return {};
+}
+
 // 단일 행 청구/결재 플래그 토글 — /logs 표 pill 클릭 즉시 저장용.
 export async function toggleLogFlagAction(
   id: string,

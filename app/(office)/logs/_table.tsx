@@ -30,6 +30,7 @@ import {
   bulkUpdateLogsInlineAction,
   toggleLogFlagAction,
   updateLogCompanyAction,
+  updateLogDateAction,
   type InlineRowUpdate,
   type BulkUpdateResult,
 } from '@/actions/waste-logs';
@@ -492,7 +493,12 @@ function Row({
           aria-label="선택"
         />
       </TableCell>
-      <TableCell className="font-mono text-xs">{wrap(formatDate(row.log_date))}</TableCell>
+      <TableCell
+        className="font-mono text-xs"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <DateEditor logId={row.id} logDate={row.log_date} disabled={isArchived} />
+      </TableCell>
       <TableCell>
         {wrap(
           <Pill tone={row.direction === 'in' ? 'info' : 'primary'}>
@@ -750,6 +756,80 @@ function FlagToggle({
       )}
     >
       <Pill tone={value ? 'info' : 'danger'}>{value ? labelOn : labelOff}</Pill>
+    </button>
+  );
+}
+
+// 일자 인라인 편집 — 클릭 시 date input, Enter/blur 로 확정 시 즉시 저장 (Escape 취소)
+function DateEditor({
+  logId,
+  logDate,
+  disabled,
+}: {
+  logId: string;
+  logDate: string;
+  disabled: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(logDate);
+  const [optimistic, setOptimistic] = useState(logDate);
+  const [pending, startTransition] = useTransition();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // rows prop 갱신 (revalidate) 시 서버 값으로 동기화
+  useEffect(() => {
+    setOptimistic(logDate);
+    setValue(logDate);
+  }, [logDate]);
+
+  useEffect(() => {
+    if (editing) {
+      setValue(optimistic);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [editing, optimistic]);
+
+  const commit = (next: string) => {
+    setEditing(false);
+    if (!next || next === optimistic || !/^\d{4}-\d{2}-\d{2}$/.test(next)) return;
+    const prev = optimistic;
+    setOptimistic(next); // optimistic
+    startTransition(async () => {
+      const r = await updateLogDateAction(logId, next);
+      if (r.error) setOptimistic(prev); // 실패 시 롤백
+    });
+  };
+
+  if (disabled) {
+    return <span>{formatDate(optimistic)}</span>;
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="date"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={(e) => commit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit((e.target as HTMLInputElement).value);
+          if (e.key === 'Escape') setEditing(false);
+        }}
+        className="h-7 w-[130px] rounded border border-foreground bg-surface px-1.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      disabled={pending}
+      title="클릭하여 일자 수정"
+      className="cursor-pointer text-left font-mono text-xs hover:underline disabled:opacity-60"
+    >
+      {formatDate(optimistic)}
     </button>
   );
 }

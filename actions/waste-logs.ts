@@ -399,6 +399,36 @@ export async function updateLogDateAction(
   return {};
 }
 
+// 선택 행 일자 일괄 변경 — /logs 표 체크박스 선택 후 액션 바에서 사용.
+export interface BulkDateResult {
+  ok: boolean;
+  updated: number;
+  error?: string;
+}
+
+export async function bulkUpdateLogDatesAction(
+  ids: string[],
+  logDate: string,
+): Promise<BulkDateResult> {
+  if (ids.length === 0) {
+    return { ok: true, updated: 0 };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
+    return { ok: false, updated: 0, error: '일자는 YYYY-MM-DD 형식이어야 합니다' };
+  }
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('waste_logs')
+    .update({ log_date: logDate })
+    .in('id', ids)
+    .select('id');
+  if (error) {
+    return { ok: false, updated: 0, error: error.message };
+  }
+  revalidateAllAffectedByLog();
+  return { ok: true, updated: (data ?? []).length };
+}
+
 // 단일 행 청구/결재 플래그 토글 — /logs 표 pill 클릭 즉시 저장용.
 export async function toggleLogFlagAction(
   id: string,

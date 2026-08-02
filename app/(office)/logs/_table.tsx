@@ -11,6 +11,7 @@ import {
   Save,
   RotateCcw,
   ChevronDown,
+  CalendarDays,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import {
 import {
   bulkArchiveLogsAction,
   bulkUpdateLogsInlineAction,
+  bulkUpdateLogDatesAction,
   toggleLogFlagAction,
   updateLogCompanyAction,
   updateLogDateAction,
@@ -141,6 +143,9 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
   const [reason, setReason] = useState('');
   const [archivePending, startArchiveTransition] = useTransition();
   const [savePending, startSaveTransition] = useTransition();
+  const [bulkDate, setBulkDate] = useState('');
+  const [bulkDateError, setBulkDateError] = useState<string | null>(null);
+  const [bulkDatePending, startBulkDateTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [saveResult, setSaveResult] = useState<BulkUpdateResult | null>(null);
@@ -237,6 +242,23 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
 
   const clearSelection = () => setSelected(new Set());
 
+  // 선택 행 일자 일괄 변경 — 액션 바의 date input + 버튼으로 즉시 저장
+  const handleBulkDate = () => {
+    if (!bulkDate) return;
+    setBulkDateError(null);
+    startBulkDateTransition(async () => {
+      const r = await bulkUpdateLogDatesAction([...selected], bulkDate);
+      if (!r.ok) {
+        setBulkDateError(r.error ?? '일자 변경 실패');
+        return;
+      }
+      setSavedNotice(`${r.updated}건 일자 변경 완료 → ${bulkDate}`);
+      setSelected(new Set());
+      setBulkDate('');
+      setTimeout(() => setSavedNotice(null), 3000);
+    });
+  };
+
   const handleDelete = () => {
     setError(null);
     startArchiveTransition(async () => {
@@ -276,7 +298,32 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
             <span className="font-mono font-semibold">{selected.size}</span>
             <span className="text-foreground-muted">건 선택됨</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* 일자 일괄 변경 — 날짜 선택 후 버튼 클릭 시 선택 행 전체 즉시 저장 */}
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="date"
+                value={bulkDate}
+                onChange={(e) => setBulkDate(e.target.value)}
+                disabled={bulkDatePending}
+                className="h-8 w-[140px] text-xs"
+                aria-label="변경할 일자"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleBulkDate}
+                disabled={!bulkDate || bulkDatePending}
+              >
+                {bulkDatePending ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CalendarDays className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
+                )}
+                {selected.size}건 일자 변경
+              </Button>
+            </div>
+            <span className="h-4 w-px bg-border" />
             <Button size="sm" variant="ghost" onClick={clearSelection}>
               <X className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />선택 해제
             </Button>
@@ -289,6 +336,13 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
               {selected.size}건 삭제
             </Button>
           </div>
+        </div>
+      )}
+
+      {bulkDateError && (
+        <div className="mb-3 flex items-center gap-2 rounded-md border border-danger/40 bg-danger-bg/60 px-3 py-2 text-sm text-danger">
+          <AlertTriangle className="h-4 w-4" strokeWidth={1.75} />
+          {bulkDateError}
         </div>
       )}
 

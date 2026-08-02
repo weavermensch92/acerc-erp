@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, Save } from 'lucide-react';
+import { Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, Save, X, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { bulkImportLogsAction, type ImportRow, type BulkImportResult } from '@/actions/import';
 import { calcBilling } from '@/lib/calc/billing';
@@ -79,6 +79,9 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
   );
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<BulkImportResult | null>(null);
+  // 행 다중 선택 (index 기반) — 일자 일괄 적용용
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkDate, setBulkDate] = useState('');
   // 서버에 보낸 validRows[i] 가 화면에서 몇 번 행이었는지(0-base)
   const [submittedRowIndex, setSubmittedRowIndex] = useState<number[]>([]);
 
@@ -129,6 +132,40 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
 
   const removeRow = (i: number) => {
     setRows((prev) => prev.filter((_, idx) => idx !== i));
+    // 삭제된 행 이후의 선택 index 를 한 칸씩 당김
+    setSelected((prev) => {
+      const next = new Set<number>();
+      for (const idx of prev) {
+        if (idx === i) continue;
+        next.add(idx > i ? idx - 1 : idx);
+      }
+      return next;
+    });
+  };
+
+  const allSelected = rows.length > 0 && selected.size === rows.length;
+
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(rows.map((_, i) => i)));
+  };
+
+  const toggleOne = (i: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
+
+  // 선택 행에 일자 일괄 적용 (저장 전 로컬 상태만 변경)
+  const applyBulkDate = () => {
+    if (!bulkDate || selected.size === 0) return;
+    setRows((prev) =>
+      prev.map((r, i) => (selected.has(i) ? { ...r, log_date: bulkDate } : r)),
+    );
+    setSelected(new Set());
+    setBulkDate('');
   };
 
   const isRowEmpty = (r: SpreadsheetRow) =>
@@ -211,6 +248,7 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
       if (r.ok && r.failed.length === 0) {
         // 모두 성공 — 폼 초기화
         setRows(Array.from({ length: INITIAL_ROWS }, () => blankRow()));
+        setSelected(new Set());
       }
     });
   };
@@ -243,11 +281,53 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
         ))}
       </datalist>
 
+      {/* 선택 액션 바 — 선택 행 일자 일괄 적용 */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-foreground bg-surface px-4 py-2.5 shadow-md">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-mono font-semibold">{selected.size}</span>
+            <span className="text-foreground-muted">행 선택됨</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={bulkDate}
+              onChange={(e) => setBulkDate(e.target.value)}
+              aria-label="적용할 일자"
+              className="h-8 w-[140px] rounded-md border border-border bg-surface px-2 text-xs focus:border-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={applyBulkDate}
+              disabled={!bulkDate}
+            >
+              <CalendarDays className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
+              {selected.size}행 일자 적용
+            </Button>
+            <span className="h-4 w-px bg-border" />
+            <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+              <X className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />선택 해제
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* 스프레드시트 */}
       <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-sm">
         <table className="w-full text-xs">
           <thead className="bg-background-subtle">
             <tr className="border-b border-border">
+              <Th className="w-8">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  className="h-3.5 w-3.5 rounded border-border"
+                  aria-label="전체 선택"
+                />
+              </Th>
               <Th className="w-8">#</Th>
               <Th className="w-28">일자<span className="text-danger">*</span></Th>
               <Th className="w-16">구분<span className="text-danger">*</span></Th>
@@ -286,6 +366,15 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
                     empty && 'bg-background-subtle/30',
                   )}
                 >
+                  <Td>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(i)}
+                      onChange={() => toggleOne(i)}
+                      className="h-3.5 w-3.5 rounded border-border"
+                      aria-label={`${i + 1}행 선택`}
+                    />
+                  </Td>
                   <Td>
                     <span className="font-mono text-foreground-muted">{i + 1}</span>
                   </Td>

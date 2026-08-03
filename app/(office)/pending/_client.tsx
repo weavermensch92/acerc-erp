@@ -12,9 +12,12 @@ import {
   AlertTriangle,
   Save,
   RotateCcw,
+  GitMerge,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/erp/Pill';
+import { Modal } from '@/components/erp/Modal';
 import { formatKRW, formatDate, formatNumber } from '@/lib/format';
 import {
   markCompanyInvoicedAction,
@@ -24,8 +27,10 @@ import {
 } from '@/actions/pending';
 import {
   bulkUpdateLogsInlineAction,
+  bulkMoveLogsCompanyAction,
   type InlineRowUpdate,
 } from '@/actions/waste-logs';
+import { mergeCompaniesAction } from '@/actions/companies';
 import { calcBilling } from '@/lib/calc/billing';
 import { cn } from '@/lib/utils';
 import type { BillingType, Direction } from '@/lib/types/database';
@@ -68,6 +73,7 @@ interface Props {
   period: { from: string; to: string };
   sitesByCompany?: Record<string, Array<{ id: string; name: string }>>;
   wasteTypes?: Array<{ id: string; name: string }>;
+  companies?: Array<{ id: string; name: string }>;
 }
 
 export function PendingClient({
@@ -77,6 +83,7 @@ export function PendingClient({
   period,
   sitesByCompany = {},
   wasteTypes = [],
+  companies = [],
 }: Props) {
   const router = useRouter();
   const isInbound = direction === 'in';
@@ -187,6 +194,11 @@ export function PendingClient({
                     </div>
                   )}
                 </div>
+                <MergeCompanyButton
+                  company={{ id: g.companyId, name: g.companyName }}
+                  companies={companies}
+                  onDone={() => router.refresh()}
+                />
                 <Link href={linkHref}>
                   <Button size="sm" variant="outline">
                     <ExternalLink
@@ -222,6 +234,8 @@ export function PendingClient({
                 kind={kind}
                 sites={sitesByCompany[g.companyId] ?? []}
                 wasteTypes={wasteTypes}
+                companies={companies}
+                currentCompanyId={g.companyId}
                 onAfterUpdate={() => router.refresh()}
               />
             )}
@@ -229,6 +243,128 @@ export function PendingClient({
         );
       })}
     </div>
+  );
+}
+
+// 거래처 병합 — 그룹 헤더의 [병합] 버튼. 남길 거래처를 검색·선택 후 확인하면
+// 이 거래처의 모든 데이터(일보·현장·명세표배치·발급이력)가 대상으로 이전되고 원본은 삭제(보관)됨.
+function MergeCompanyButton({
+  company,
+  companies,
+  onDone,
+}: {
+  company: { id: string; name: string };
+  companies: Array<{ id: string; name: string }>;
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [target, setTarget] = useState<{ id: string; name: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const filtered = (
+    query.trim() ? companies.filter((c) => c.name.includes(query.trim())) : companies
+  ).filter((c) => c.id !== company.id);
+
+  const openModal = () => {
+    setQuery('');
+    setTarget(null);
+    setErr(null);
+    setOpen(true);
+  };
+
+  const handleMerge = () => {
+    if (!target || pending) return;
+    setErr(null);
+    startTransition(async () => {
+      const r = await mergeCompaniesAction(company.id, target.id);
+      if (!r.ok) {
+        setErr(r.error ?? '병합 실패');
+        return;
+      }
+      setOpen(false);
+      onDone();
+    });
+  };
+
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={openModal} title="이 거래처를 다른 거래처와 병합">
+        <GitMerge className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
+        병합
+      </Button>
+
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="거래처 병합"
+        description={`'${company.name}' 의 모든 일보·현장·명세표 데이터를 선택한 거래처로 이전하고, '${company.name}' 은 삭제(보관) 처리합니다.`}
+      >
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground-secondary">
+              남길 거래처 검색
+            </label>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="거래처명 검색..."
+              autoComplete="off"
+              className="h-8 w-full rounded-md border border-border bg-surface px-2 text-xs focus:border-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
+            />
+            <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+              {filtered.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-foreground-muted">검색 결과 없음</p>
+              ) : (
+                filtered.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setTarget(c)}
+                    className={cn(
+                      'block w-full px-3 py-1.5 text-left text-xs hover:bg-background-subtle',
+                      target?.id === c.id && 'bg-foreground text-background hover:bg-foreground',
+                    )}
+                  >
+                    {c.name}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {target && (
+            <div className="rounded-md bg-background-subtle px-3 py-2.5 text-sm">
+              <span className="text-foreground-muted">{company.name}</span>
+              <span className="mx-2 text-foreground-muted">→</span>
+              <span className="font-semibold">{target.name}</span>
+              <span className="ml-1 text-xs text-foreground-muted">(으)로 병합</span>
+            </div>
+          )}
+
+          <div className="rounded-md bg-warning-bg/60 px-3 py-2 text-xs text-warning">
+            <AlertTriangle className="mr-1.5 inline h-3.5 w-3.5" strokeWidth={1.75} />
+            병합 후 원본 거래처는 거래처 목록에서 삭제(보관) 상태가 됩니다. 변경 이력(audit)에 기록됩니다.
+          </div>
+
+          {err && (
+            <div className="rounded-md bg-danger-bg px-3 py-2 text-xs text-danger">{err}</div>
+          )}
+
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)} className="flex-1">
+              취소
+            </Button>
+            <Button onClick={handleMerge} disabled={!target || pending} className="flex-1">
+              {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              병합 실행
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 
@@ -278,6 +414,8 @@ function LogsTable({
   kind,
   sites,
   wasteTypes,
+  companies,
+  currentCompanyId,
   onAfterUpdate,
 }: {
   logs: PendingLogRow[];
@@ -285,11 +423,15 @@ function LogsTable({
   kind: Kind;
   sites: Array<{ id: string; name: string }>;
   wasteTypes: Array<{ id: string; name: string }>;
+  companies: Array<{ id: string; name: string }>;
+  currentCompanyId: string;
   onAfterUpdate: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [isSaving, startSaveTransition] = useTransition();
+  const [isMoving, startMoveTransition] = useTransition();
+  const [moveTargetId, setMoveTargetId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // 원본 상태 (저장 후 다시 fetch 되면 logs prop 이 바뀌므로 useMemo 로 추출)
@@ -391,6 +533,22 @@ function LogsTable({
   };
 
   const onResetEdits = () => setEdited({});
+
+  // 선택 건 거래처 이동 (분리) — 잘못 묶인 일보를 다른 거래처로 옮김
+  const onMove = () => {
+    if (selected.size === 0 || !moveTargetId) return;
+    setError(null);
+    startMoveTransition(async () => {
+      const r = await bulkMoveLogsCompanyAction([...selected], moveTargetId);
+      if (!r.ok) {
+        setError(r.error ?? '거래처 이동 실패');
+        return;
+      }
+      setSelected(new Set());
+      setMoveTargetId('');
+      onAfterUpdate();
+    });
+  };
 
   return (
     <div className="border-t border-divider bg-background-subtle/40">
@@ -594,17 +752,52 @@ function LogsTable({
               </>
             )}
             {selected.size > 0 && (
-              <Button size="sm" onClick={onApply} disabled={isPending}>
-                {isPending ? (
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <CheckCircle2
-                    className="mr-1 h-3.5 w-3.5"
-                    strokeWidth={1.75}
-                  />
-                )}
-                선택 {applyLabel}
-              </Button>
+              <>
+                {/* 거래처 이동 (분리) — 선택 건을 다른 거래처로 */}
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={moveTargetId}
+                    onChange={(e) => setMoveTargetId(e.target.value)}
+                    disabled={isMoving}
+                    aria-label="이동할 거래처"
+                    className="h-8 max-w-[180px] rounded-md border border-border bg-surface px-1.5 text-xs focus:border-foreground focus:outline-none"
+                  >
+                    <option value="">거래처 이동...</option>
+                    {companies
+                      .filter((c) => c.id !== currentCompanyId)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={onMove}
+                    disabled={!moveTargetId || isMoving}
+                    title="선택 일보를 다른 거래처로 이동 (현장은 초기화)"
+                  >
+                    {isMoving ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ArrowRightLeft className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
+                    )}
+                    {selected.size}건 이동
+                  </Button>
+                </div>
+                <Button size="sm" onClick={onApply} disabled={isPending}>
+                  {isPending ? (
+                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2
+                      className="mr-1 h-3.5 w-3.5"
+                      strokeWidth={1.75}
+                    />
+                  )}
+                  선택 {applyLabel}
+                </Button>
+              </>
             )}
           </div>
         </div>

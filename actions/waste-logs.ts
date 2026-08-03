@@ -429,6 +429,37 @@ export async function bulkUpdateLogDatesAction(
   return { ok: true, updated: (data ?? []).length };
 }
 
+// 선택 일보 거래처 이동 (분리) — 미청구 처리 화면에서 일부 건만 다른 거래처로 옮길 때 사용.
+// 거래처가 바뀌므로 site_id 는 초기화 (updateLogCompanyAction 과 동일 정책).
+export interface BulkMoveResult {
+  ok: boolean;
+  moved: number;
+  error?: string;
+}
+
+export async function bulkMoveLogsCompanyAction(
+  ids: string[],
+  companyId: string,
+): Promise<BulkMoveResult> {
+  if (ids.length === 0) {
+    return { ok: true, moved: 0 };
+  }
+  if (!companyId) {
+    return { ok: false, moved: 0, error: '이동할 거래처를 선택하세요' };
+  }
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('waste_logs')
+    .update({ company_id: companyId, site_id: null })
+    .in('id', ids)
+    .select('id');
+  if (error) {
+    return { ok: false, moved: 0, error: error.message };
+  }
+  revalidateAllAffectedByLog();
+  return { ok: true, moved: (data ?? []).length };
+}
+
 // 단일 행 청구/결재 플래그 토글 — /logs 표 pill 클릭 즉시 저장용.
 export async function toggleLogFlagAction(
   id: string,

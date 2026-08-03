@@ -30,7 +30,11 @@ import {
   bulkMoveLogsCompanyAction,
   type InlineRowUpdate,
 } from '@/actions/waste-logs';
-import { mergeCompaniesAction } from '@/actions/companies';
+import {
+  mergeCompaniesAction,
+  getCompaniesMergeCountsAction,
+  type CompanyMergeCounts,
+} from '@/actions/companies';
 import { calcBilling } from '@/lib/calc/billing';
 import { cn } from '@/lib/utils';
 import type { BillingType, Direction } from '@/lib/types/database';
@@ -100,6 +104,9 @@ export function PendingClient({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  // 병합용 거래처 체크 선택
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   if (groups.length === 0) {
     return (
@@ -125,6 +132,17 @@ export function PendingClient({
       return next;
     });
   };
+
+  const toggleChecked = (id: string) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const checkedGroups = groups.filter((g) => checked.has(g.companyId));
 
   const onProcessGroup = (g: CompanyGroup) => {
     setError(null);
@@ -153,6 +171,45 @@ export function PendingClient({
         </div>
       )}
 
+      {/* 병합 선택 바 — 거래처 2곳 이상 체크 시 병합 가능 */}
+      {checked.size > 0 && (
+        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-foreground bg-surface px-4 py-2.5 shadow-md">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-mono font-semibold">{checked.size}</span>
+            <span className="text-foreground-muted">곳 선택됨</span>
+            {checked.size < 2 && (
+              <span className="text-[11px] text-foreground-muted">
+                — 병합하려면 2곳 이상 체크하세요
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setChecked(new Set())}>
+              선택 해제
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setMergeOpen(true)}
+              disabled={checked.size < 2}
+            >
+              <GitMerge className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
+              {checked.size}곳 병합
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <MergeSelectedModal
+        open={mergeOpen}
+        onClose={() => setMergeOpen(false)}
+        selected={checkedGroups.map((g) => ({ id: g.companyId, name: g.companyName }))}
+        onDone={() => {
+          setMergeOpen(false);
+          setChecked(new Set());
+          router.refresh();
+        }}
+      />
+
       {groups.map((g) => {
         const isOpen = expanded.has(g.companyId);
         const isProcessing = pendingId === g.companyId;
@@ -166,6 +223,14 @@ export function PendingClient({
             className="overflow-hidden rounded-[10px] border border-border bg-surface shadow-sm"
           >
             <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <input
+                type="checkbox"
+                checked={checked.has(g.companyId)}
+                onChange={() => toggleChecked(g.companyId)}
+                className="h-4 w-4 rounded border-border"
+                aria-label={`${g.companyName} 병합 선택`}
+                title="병합할 거래처 선택"
+              />
               <button
                 type="button"
                 onClick={() => toggle(g.companyId)}
@@ -194,11 +259,6 @@ export function PendingClient({
                     </div>
                   )}
                 </div>
-                <MergeCompanyButton
-                  company={{ id: g.companyId, name: g.companyName }}
-                  companies={companies}
-                  onDone={() => router.refresh()}
-                />
                 <Link href={linkHref}>
                   <Button size="sm" variant="outline">
                     <ExternalLink
@@ -246,125 +306,180 @@ export function PendingClient({
   );
 }
 
-// 거래처 병합 — 그룹 헤더의 [병합] 버튼. 남길 거래처를 검색·선택 후 확인하면
-// 이 거래처의 모든 데이터(일보·현장·명세표배치·발급이력)가 대상으로 이전되고 원본은 삭제(보관)됨.
-function MergeCompanyButton({
-  company,
-  companies,
+// 체크한 거래처 병합 모달 — 남길 거래처를 고르면 나머지의 모든 데이터(일보·현장·명세표배치·발급이력)가
+// 대상으로 이전되고 원본들은 삭제(보관)됨. 병합될 항목 건수를 조회해 시각화.
+function MergeSelectedModal({
+  open,
+  onClose,
+  selected,
   onDone,
 }: {
-  company: { id: string; name: string };
-  companies: Array<{ id: string; name: string }>;
+  open: boolean;
+  onClose: () => void;
+  selected: Array<{ id: string; name: string }>;
   onDone: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [target, setTarget] = useState<{ id: string; name: string } | null>(null);
+  const [counts, setCounts] = useState<CompanyMergeCounts[] | null>(null);
+  const [targetId, setTargetId] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const filtered = (
-    query.trim() ? companies.filter((c) => c.name.includes(query.trim())) : companies
-  ).filter((c) => c.id !== company.id);
+  const idsKey = selected
+    .map((c) => c.id)
+    .sort()
+    .join(',');
 
-  const openModal = () => {
-    setQuery('');
-    setTarget(null);
+  // 모달 열릴 때 각 거래처의 병합 대상 건수 조회
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setCounts(null);
     setErr(null);
-    setOpen(true);
-  };
-
-  const handleMerge = () => {
-    if (!target || pending) return;
-    setErr(null);
-    startTransition(async () => {
-      const r = await mergeCompaniesAction(company.id, target.id);
-      if (!r.ok) {
-        setErr(r.error ?? '병합 실패');
+    getCompaniesMergeCountsAction(selected.map((c) => c.id)).then((r) => {
+      if (cancelled) return;
+      if (!r.ok || !r.companies) {
+        setErr(r.error ?? '병합 항목 조회 실패');
         return;
       }
-      setOpen(false);
+      // 일보 많은 순 정렬 — 기본 남길 거래처 = 데이터가 가장 많은 곳
+      const sorted = [...r.companies].sort((a, b) => b.waste_logs - a.waste_logs);
+      setCounts(sorted);
+      setTargetId(sorted[0]?.id ?? '');
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, idsKey]);
+
+  const target = counts?.find((c) => c.id === targetId) ?? null;
+  const sources = (counts ?? []).filter((c) => c.id !== targetId);
+  const mergedLogs = (counts ?? []).reduce((s, c) => s + c.waste_logs, 0);
+
+  const handleMerge = () => {
+    if (!target || sources.length === 0 || pending) return;
+    setErr(null);
+    startTransition(async () => {
+      for (const s of sources) {
+        const r = await mergeCompaniesAction(s.id, target.id);
+        if (!r.ok) {
+          setErr(
+            `'${s.name}' 병합 실패: ${r.error ?? '알 수 없는 오류'} — 남은 병합은 중단되었습니다.`,
+          );
+          return;
+        }
+      }
       onDone();
     });
   };
 
   return (
-    <>
-      <Button size="sm" variant="outline" onClick={openModal} title="이 거래처를 다른 거래처와 병합">
-        <GitMerge className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
-        병합
-      </Button>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="거래처 병합"
+      description="남길 거래처 1곳을 선택하세요. 나머지 거래처의 모든 데이터(일보·현장·명세표·발급이력)가 그 거래처로 이전되고, 원본은 삭제(보관) 처리됩니다."
+    >
+      <div className="space-y-4">
+        {counts === null && !err ? (
+          <div className="flex items-center gap-2 py-4 text-sm text-foreground-muted">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            병합 항목 조회 중...
+          </div>
+        ) : (
+          counts !== null && (
+            <>
+              <div className="space-y-1.5">
+                {counts.map((c) => {
+                  const isTarget = c.id === targetId;
+                  return (
+                    <label
+                      key={c.id}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition-colors',
+                        isTarget
+                          ? 'border-foreground bg-background-subtle'
+                          : 'border-border hover:bg-background-subtle/50',
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="merge-target"
+                        checked={isTarget}
+                        onChange={() => setTargetId(c.id)}
+                        className="h-3.5 w-3.5"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold">{c.name}</span>
+                          {isTarget ? (
+                            <Pill tone="success">남김</Pill>
+                          ) : (
+                            <Pill tone="danger">삭제(보관)</Pill>
+                          )}
+                        </div>
+                        <div className="mt-0.5 font-mono text-[11px] text-foreground-muted">
+                          일보 {formatNumber(c.waste_logs)} · 현장 {formatNumber(c.sites)} ·
+                          명세표 {formatNumber(c.invoice_batches)} · 발급이력{' '}
+                          {formatNumber(c.pdf_downloads)}
+                        </div>
+                      </div>
+                      {!isTarget && (
+                        <GitMerge
+                          className="h-4 w-4 text-foreground-muted"
+                          strokeWidth={1.75}
+                        />
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
 
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="거래처 병합"
-        description={`'${company.name}' 의 모든 일보·현장·명세표 데이터를 선택한 거래처로 이전하고, '${company.name}' 은 삭제(보관) 처리합니다.`}
-      >
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground-secondary">
-              남길 거래처 검색
-            </label>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="거래처명 검색..."
-              autoComplete="off"
-              className="h-8 w-full rounded-md border border-border bg-surface px-2 text-xs focus:border-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
-            />
-            <div className="max-h-44 overflow-y-auto rounded-md border border-border">
-              {filtered.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-foreground-muted">검색 결과 없음</p>
-              ) : (
-                filtered.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setTarget(c)}
-                    className={cn(
-                      'block w-full px-3 py-1.5 text-left text-xs hover:bg-background-subtle',
-                      target?.id === c.id && 'bg-foreground text-background hover:bg-foreground',
-                    )}
-                  >
-                    {c.name}
-                  </button>
-                ))
+              {target && sources.length > 0 && (
+                <div className="rounded-md bg-background-subtle px-3 py-2.5 text-sm">
+                  <span className="text-foreground-muted">
+                    {sources.map((s) => s.name).join(' · ')}
+                  </span>
+                  <span className="mx-2 text-foreground-muted">→</span>
+                  <span className="font-semibold">{target.name}</span>
+                  <div className="mt-1 text-xs text-foreground-muted">
+                    병합 후 &lsquo;{target.name}&rsquo; 일보 총{' '}
+                    <span className="font-mono font-semibold text-foreground">
+                      {formatNumber(mergedLogs)}
+                    </span>
+                    건
+                  </div>
+                </div>
               )}
-            </div>
-          </div>
 
-          {target && (
-            <div className="rounded-md bg-background-subtle px-3 py-2.5 text-sm">
-              <span className="text-foreground-muted">{company.name}</span>
-              <span className="mx-2 text-foreground-muted">→</span>
-              <span className="font-semibold">{target.name}</span>
-              <span className="ml-1 text-xs text-foreground-muted">(으)로 병합</span>
-            </div>
-          )}
+              <div className="rounded-md bg-warning-bg/60 px-3 py-2 text-xs text-warning">
+                <AlertTriangle className="mr-1.5 inline h-3.5 w-3.5" strokeWidth={1.75} />
+                병합은 되돌릴 수 없습니다. 원본 {sources.length}곳은 거래처 목록에서
+                삭제(보관) 상태가 되며, 변경 이력(audit)에 기록됩니다.
+              </div>
+            </>
+          )
+        )}
 
-          <div className="rounded-md bg-warning-bg/60 px-3 py-2 text-xs text-warning">
-            <AlertTriangle className="mr-1.5 inline h-3.5 w-3.5" strokeWidth={1.75} />
-            병합 후 원본 거래처는 거래처 목록에서 삭제(보관) 상태가 됩니다. 변경 이력(audit)에 기록됩니다.
-          </div>
+        {err && (
+          <div className="rounded-md bg-danger-bg px-3 py-2 text-xs text-danger">{err}</div>
+        )}
 
-          {err && (
-            <div className="rounded-md bg-danger-bg px-3 py-2 text-xs text-danger">{err}</div>
-          )}
-
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)} className="flex-1">
-              취소
-            </Button>
-            <Button onClick={handleMerge} disabled={!target || pending} className="flex-1">
-              {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              병합 실행
-            </Button>
-          </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onClose} className="flex-1" disabled={pending}>
+            취소
+          </Button>
+          <Button
+            onClick={handleMerge}
+            disabled={!target || sources.length === 0 || pending}
+            className="flex-1"
+          >
+            {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+            {sources.length}곳 병합 실행
+          </Button>
         </div>
-      </Modal>
-    </>
+      </div>
+    </Modal>
   );
 }
 

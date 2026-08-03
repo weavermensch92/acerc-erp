@@ -84,6 +84,8 @@ export interface CompanyActionResult {
   ok: boolean;
   error?: string;
   companyId?: string;
+  // 이름 중복(23505) 시 충돌한 기존 거래처 — 병합 제안 모달용
+  conflict?: { id: string; name: string };
 }
 
 export async function createCompanyAction(input: CompanyInput): Promise<CompanyActionResult> {
@@ -122,7 +124,19 @@ export async function updateCompanyAction(
     .eq('id', id);
   if (error) {
     if (error.code === '23505') {
-      return { ok: false, error: '같은 이름의 거래처가 이미 등록되어 있습니다.' };
+      // 충돌한 기존 거래처를 찾아 반환 — 폼에서 병합 여부를 물을 수 있게
+      const { data: dup } = await supabase
+        .from('companies')
+        .select('id, name')
+        .eq('name', parsed.data.name)
+        .eq('is_deleted', false)
+        .neq('id', id)
+        .maybeSingle();
+      return {
+        ok: false,
+        error: '같은 이름의 거래처가 이미 등록되어 있습니다.',
+        conflict: dup ? { id: dup.id as string, name: dup.name as string } : undefined,
+      };
     }
     return { ok: false, error: error.message };
   }
@@ -163,6 +177,64 @@ export async function restoreCompanyAction(id: string): Promise<CompanyActionRes
   revalidatePath('/companies');
   revalidatePath(`/companies/${id}`);
   return { ok: true, companyId: id };
+}
+
+// ========================================
+// 병합 미리보기 — 거래처별 자식 레코드 건수 (병합 모달 시각화용)
+// ========================================
+export interface CompanyMergeCounts {
+  id: string;
+  name: string;
+  waste_logs: number;
+  sites: number;
+  invoice_batches: number;
+  pdf_downloads: number;
+}
+
+export interface MergeCountsResult {
+  ok: boolean;
+  error?: string;
+  companies?: CompanyMergeCounts[];
+}
+
+export async function getCompaniesMergeCountsAction(
+  ids: string[],
+): Promise<MergeCountsResult> {
+  if (ids.length === 0) return { ok: true, companies: [] };
+  const supabase = createClient();
+
+  const { data: namesData, error: namesErr } = await supabase
+    .from('companies')
+    .select('id, name')
+    .in('id', ids);
+  if (namesErr) return { ok: false, error: namesErr.message };
+  const nameMap = new Map(
+    ((namesData ?? []) as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]),
+  );
+
+  const tables = ['waste_logs', 'sites', 'invoice_batches', 'pdf_downloads'] as const;
+  const result: CompanyMergeCounts[] = [];
+  for (const id of ids) {
+    if (!nameMap.has(id)) continue;
+    const counts = await Promise.all(
+      tables.map(async (table) => {
+        const { count } = await supabase
+          .from(table)
+          .select('id', { count: 'exact', head: true })
+          .eq('company_id', id);
+        return count ?? 0;
+      }),
+    );
+    result.push({
+      id,
+      name: nameMap.get(id)!,
+      waste_logs: counts[0],
+      sites: counts[1],
+      invoice_batches: counts[2],
+      pdf_downloads: counts[3],
+    });
+  }
+  return { ok: true, companies: result };
 }
 
 // ========================================

@@ -12,9 +12,12 @@ import {
   AlertTriangle,
   Save,
   RotateCcw,
+  GitMerge,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/erp/Pill';
+import { Modal } from '@/components/erp/Modal';
 import { formatKRW, formatDate, formatNumber } from '@/lib/format';
 import {
   markCompanyInvoicedAction,
@@ -24,8 +27,14 @@ import {
 } from '@/actions/pending';
 import {
   bulkUpdateLogsInlineAction,
+  bulkMoveLogsCompanyAction,
   type InlineRowUpdate,
 } from '@/actions/waste-logs';
+import {
+  mergeCompaniesAction,
+  getCompaniesMergeCountsAction,
+  type CompanyMergeCounts,
+} from '@/actions/companies';
 import { calcBilling } from '@/lib/calc/billing';
 import { cn } from '@/lib/utils';
 import type { BillingType, Direction } from '@/lib/types/database';
@@ -68,6 +77,7 @@ interface Props {
   period: { from: string; to: string };
   sitesByCompany?: Record<string, Array<{ id: string; name: string }>>;
   wasteTypes?: Array<{ id: string; name: string }>;
+  companies?: Array<{ id: string; name: string }>;
 }
 
 export function PendingClient({
@@ -77,6 +87,7 @@ export function PendingClient({
   period,
   sitesByCompany = {},
   wasteTypes = [],
+  companies = [],
 }: Props) {
   const router = useRouter();
   const isInbound = direction === 'in';
@@ -93,6 +104,9 @@ export function PendingClient({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  // 병합용 거래처 체크 선택
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   if (groups.length === 0) {
     return (
@@ -118,6 +132,17 @@ export function PendingClient({
       return next;
     });
   };
+
+  const toggleChecked = (id: string) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const checkedGroups = groups.filter((g) => checked.has(g.companyId));
 
   const onProcessGroup = (g: CompanyGroup) => {
     setError(null);
@@ -146,6 +171,45 @@ export function PendingClient({
         </div>
       )}
 
+      {/* 병합 선택 바 — 거래처 2곳 이상 체크 시 병합 가능 */}
+      {checked.size > 0 && (
+        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-foreground bg-surface px-4 py-2.5 shadow-md">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-mono font-semibold">{checked.size}</span>
+            <span className="text-foreground-muted">곳 선택됨</span>
+            {checked.size < 2 && (
+              <span className="text-[11px] text-foreground-muted">
+                — 병합하려면 2곳 이상 체크하세요
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setChecked(new Set())}>
+              선택 해제
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setMergeOpen(true)}
+              disabled={checked.size < 2}
+            >
+              <GitMerge className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
+              {checked.size}곳 병합
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <MergeSelectedModal
+        open={mergeOpen}
+        onClose={() => setMergeOpen(false)}
+        selected={checkedGroups.map((g) => ({ id: g.companyId, name: g.companyName }))}
+        onDone={() => {
+          setMergeOpen(false);
+          setChecked(new Set());
+          router.refresh();
+        }}
+      />
+
       {groups.map((g) => {
         const isOpen = expanded.has(g.companyId);
         const isProcessing = pendingId === g.companyId;
@@ -159,6 +223,14 @@ export function PendingClient({
             className="overflow-hidden rounded-[10px] border border-border bg-surface shadow-sm"
           >
             <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <input
+                type="checkbox"
+                checked={checked.has(g.companyId)}
+                onChange={() => toggleChecked(g.companyId)}
+                className="h-4 w-4 rounded border-border"
+                aria-label={`${g.companyName} 병합 선택`}
+                title="병합할 거래처 선택"
+              />
               <button
                 type="button"
                 onClick={() => toggle(g.companyId)}
@@ -222,6 +294,8 @@ export function PendingClient({
                 kind={kind}
                 sites={sitesByCompany[g.companyId] ?? []}
                 wasteTypes={wasteTypes}
+                companies={companies}
+                currentCompanyId={g.companyId}
                 onAfterUpdate={() => router.refresh()}
               />
             )}
@@ -229,6 +303,183 @@ export function PendingClient({
         );
       })}
     </div>
+  );
+}
+
+// 체크한 거래처 병합 모달 — 남길 거래처를 고르면 나머지의 모든 데이터(일보·현장·명세표배치·발급이력)가
+// 대상으로 이전되고 원본들은 삭제(보관)됨. 병합될 항목 건수를 조회해 시각화.
+function MergeSelectedModal({
+  open,
+  onClose,
+  selected,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  selected: Array<{ id: string; name: string }>;
+  onDone: () => void;
+}) {
+  const [counts, setCounts] = useState<CompanyMergeCounts[] | null>(null);
+  const [targetId, setTargetId] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const idsKey = selected
+    .map((c) => c.id)
+    .sort()
+    .join(',');
+
+  // 모달 열릴 때 각 거래처의 병합 대상 건수 조회
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setCounts(null);
+    setErr(null);
+    getCompaniesMergeCountsAction(selected.map((c) => c.id)).then((r) => {
+      if (cancelled) return;
+      if (!r.ok || !r.companies) {
+        setErr(r.error ?? '병합 항목 조회 실패');
+        return;
+      }
+      // 일보 많은 순 정렬 — 기본 남길 거래처 = 데이터가 가장 많은 곳
+      const sorted = [...r.companies].sort((a, b) => b.waste_logs - a.waste_logs);
+      setCounts(sorted);
+      setTargetId(sorted[0]?.id ?? '');
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, idsKey]);
+
+  const target = counts?.find((c) => c.id === targetId) ?? null;
+  const sources = (counts ?? []).filter((c) => c.id !== targetId);
+  const mergedLogs = (counts ?? []).reduce((s, c) => s + c.waste_logs, 0);
+
+  const handleMerge = () => {
+    if (!target || sources.length === 0 || pending) return;
+    setErr(null);
+    startTransition(async () => {
+      for (const s of sources) {
+        const r = await mergeCompaniesAction(s.id, target.id);
+        if (!r.ok) {
+          setErr(
+            `'${s.name}' 병합 실패: ${r.error ?? '알 수 없는 오류'} — 남은 병합은 중단되었습니다.`,
+          );
+          return;
+        }
+      }
+      onDone();
+    });
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="거래처 병합"
+      description="남길 거래처 1곳을 선택하세요. 나머지 거래처의 모든 데이터(일보·현장·명세표·발급이력)가 그 거래처로 이전되고, 원본은 삭제(보관) 처리됩니다."
+    >
+      <div className="space-y-4">
+        {counts === null && !err ? (
+          <div className="flex items-center gap-2 py-4 text-sm text-foreground-muted">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            병합 항목 조회 중...
+          </div>
+        ) : (
+          counts !== null && (
+            <>
+              <div className="space-y-1.5">
+                {counts.map((c) => {
+                  const isTarget = c.id === targetId;
+                  return (
+                    <label
+                      key={c.id}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition-colors',
+                        isTarget
+                          ? 'border-foreground bg-background-subtle'
+                          : 'border-border hover:bg-background-subtle/50',
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="merge-target"
+                        checked={isTarget}
+                        onChange={() => setTargetId(c.id)}
+                        className="h-3.5 w-3.5"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold">{c.name}</span>
+                          {isTarget ? (
+                            <Pill tone="success">남김</Pill>
+                          ) : (
+                            <Pill tone="danger">삭제(보관)</Pill>
+                          )}
+                        </div>
+                        <div className="mt-0.5 font-mono text-[11px] text-foreground-muted">
+                          일보 {formatNumber(c.waste_logs)} · 현장 {formatNumber(c.sites)} ·
+                          명세표 {formatNumber(c.invoice_batches)} · 발급이력{' '}
+                          {formatNumber(c.pdf_downloads)}
+                        </div>
+                      </div>
+                      {!isTarget && (
+                        <GitMerge
+                          className="h-4 w-4 text-foreground-muted"
+                          strokeWidth={1.75}
+                        />
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+
+              {target && sources.length > 0 && (
+                <div className="rounded-md bg-background-subtle px-3 py-2.5 text-sm">
+                  <span className="text-foreground-muted">
+                    {sources.map((s) => s.name).join(' · ')}
+                  </span>
+                  <span className="mx-2 text-foreground-muted">→</span>
+                  <span className="font-semibold">{target.name}</span>
+                  <div className="mt-1 text-xs text-foreground-muted">
+                    병합 후 &lsquo;{target.name}&rsquo; 일보 총{' '}
+                    <span className="font-mono font-semibold text-foreground">
+                      {formatNumber(mergedLogs)}
+                    </span>
+                    건
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-md bg-warning-bg/60 px-3 py-2 text-xs text-warning">
+                <AlertTriangle className="mr-1.5 inline h-3.5 w-3.5" strokeWidth={1.75} />
+                병합은 되돌릴 수 없습니다. 원본 {sources.length}곳은 거래처 목록에서
+                삭제(보관) 상태가 되며, 변경 이력(audit)에 기록됩니다.
+              </div>
+            </>
+          )
+        )}
+
+        {err && (
+          <div className="rounded-md bg-danger-bg px-3 py-2 text-xs text-danger">{err}</div>
+        )}
+
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onClose} className="flex-1" disabled={pending}>
+            취소
+          </Button>
+          <Button
+            onClick={handleMerge}
+            disabled={!target || sources.length === 0 || pending}
+            className="flex-1"
+          >
+            {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+            {sources.length}곳 병합 실행
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -278,6 +529,8 @@ function LogsTable({
   kind,
   sites,
   wasteTypes,
+  companies,
+  currentCompanyId,
   onAfterUpdate,
 }: {
   logs: PendingLogRow[];
@@ -285,11 +538,15 @@ function LogsTable({
   kind: Kind;
   sites: Array<{ id: string; name: string }>;
   wasteTypes: Array<{ id: string; name: string }>;
+  companies: Array<{ id: string; name: string }>;
+  currentCompanyId: string;
   onAfterUpdate: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [isSaving, startSaveTransition] = useTransition();
+  const [isMoving, startMoveTransition] = useTransition();
+  const [moveTargetId, setMoveTargetId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // 원본 상태 (저장 후 다시 fetch 되면 logs prop 이 바뀌므로 useMemo 로 추출)
@@ -391,6 +648,22 @@ function LogsTable({
   };
 
   const onResetEdits = () => setEdited({});
+
+  // 선택 건 거래처 이동 (분리) — 잘못 묶인 일보를 다른 거래처로 옮김
+  const onMove = () => {
+    if (selected.size === 0 || !moveTargetId) return;
+    setError(null);
+    startMoveTransition(async () => {
+      const r = await bulkMoveLogsCompanyAction([...selected], moveTargetId);
+      if (!r.ok) {
+        setError(r.error ?? '거래처 이동 실패');
+        return;
+      }
+      setSelected(new Set());
+      setMoveTargetId('');
+      onAfterUpdate();
+    });
+  };
 
   return (
     <div className="border-t border-divider bg-background-subtle/40">
@@ -594,17 +867,52 @@ function LogsTable({
               </>
             )}
             {selected.size > 0 && (
-              <Button size="sm" onClick={onApply} disabled={isPending}>
-                {isPending ? (
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <CheckCircle2
-                    className="mr-1 h-3.5 w-3.5"
-                    strokeWidth={1.75}
-                  />
-                )}
-                선택 {applyLabel}
-              </Button>
+              <>
+                {/* 거래처 이동 (분리) — 선택 건을 다른 거래처로 */}
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={moveTargetId}
+                    onChange={(e) => setMoveTargetId(e.target.value)}
+                    disabled={isMoving}
+                    aria-label="이동할 거래처"
+                    className="h-8 max-w-[180px] rounded-md border border-border bg-surface px-1.5 text-xs focus:border-foreground focus:outline-none"
+                  >
+                    <option value="">거래처 이동...</option>
+                    {companies
+                      .filter((c) => c.id !== currentCompanyId)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={onMove}
+                    disabled={!moveTargetId || isMoving}
+                    title="선택 일보를 다른 거래처로 이동 (현장은 초기화)"
+                  >
+                    {isMoving ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ArrowRightLeft className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
+                    )}
+                    {selected.size}건 이동
+                  </Button>
+                </div>
+                <Button size="sm" onClick={onApply} disabled={isPending}>
+                  {isPending ? (
+                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2
+                      className="mr-1 h-3.5 w-3.5"
+                      strokeWidth={1.75}
+                    />
+                  )}
+                  선택 {applyLabel}
+                </Button>
+              </>
             )}
           </div>
         </div>

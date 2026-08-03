@@ -40,11 +40,12 @@ interface SpreadsheetRow {
   note: string;
 }
 
-// 총중량 - 공차중량 = 실중량 (음수 0으로 클램프)
-function calcNetWeight(total: string, tare: string): number {
+// 실중량 (음수 0으로 클램프)
+// 반입: 총중량 - 공차중량 · 반출: 공차중량 - 총중량 (계량 순서가 반대)
+function calcNetWeight(direction: Direction, total: string, tare: string): number {
   const t = total ? Number(total) : 0;
   const a = tare ? Number(tare) : 0;
-  return Math.max(0, t - a);
+  return Math.max(0, direction === 'out' ? a - t : t - a);
 }
 
 interface Props {
@@ -189,7 +190,7 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
       (s, r) => {
         const c = calcBilling({
           billingType: 'weight_based',
-          weightKg: calcNetWeight(r.weight_total_kg, r.weight_tare_kg),
+          weightKg: calcNetWeight(r.direction, r.weight_total_kg, r.weight_tare_kg),
           unitPrice: r.unit_price ? Number(r.unit_price) : 0,
           transportFee: r.transport_fee ? Number(r.transport_fee) : 0,
         });
@@ -212,7 +213,7 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
     });
     setSubmittedRowIndex(indexMap);
     const payload: ImportRow[] = validRows.map((r) => {
-      const netKg = calcNetWeight(r.weight_total_kg, r.weight_tare_kg);
+      const netKg = calcNetWeight(r.direction, r.weight_total_kg, r.weight_tare_kg);
       const c = calcBilling({
         billingType: 'weight_based',
         weightKg: netKg,
@@ -348,7 +349,7 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
           </thead>
           <tbody>
             {rows.map((r, i) => {
-              const netKg = calcNetWeight(r.weight_total_kg, r.weight_tare_kg);
+              const netKg = calcNetWeight(r.direction, r.weight_total_kg, r.weight_tare_kg);
               const calc = calcBilling({
                 billingType: 'weight_based',
                 weightKg: netKg,

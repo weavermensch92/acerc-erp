@@ -140,6 +140,14 @@ export default async function PendingPage({
     name: string;
   }>;
 
+  // 거래처 전체 목록 — 병합 대상 / 일보 거래처 이동 선택용 (활성만)
+  const { data: companiesData } = await supabase
+    .from('companies')
+    .select('id, name')
+    .eq('is_deleted', false)
+    .order('name');
+  const companies = (companiesData ?? []) as Array<{ id: string; name: string }>;
+
   const groupMap = new Map<string, CompanyGroup>();
   for (const r of rows) {
     if (!r.companies) continue;
@@ -230,6 +238,7 @@ export default async function PendingPage({
           period={{ from, to }}
           sitesByCompany={sitesByCompany}
           wasteTypes={wasteTypes}
+          companies={companies}
         />
       </div>
     </>

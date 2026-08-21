@@ -641,7 +641,7 @@ export default async function LogsPage({
           const inAmount  = inRows.reduce((s, r)  => s + Number(r.total_amount ?? 0), 0);
           const outAmount = outRows.reduce((s, r) => s + Number(r.total_amount ?? 0), 0);
           return (
-            <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1.5 border-b border-border bg-background-subtle px-7 py-2.5 text-xs">
+            <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-b border-border bg-background-subtle px-7 py-3 text-[13px] leading-5">
               <span className="text-foreground-muted">요약</span>
 
               {/* 파트 1 — 건수 */}
@@ -653,7 +653,7 @@ export default async function LogsPage({
                 <span className="text-foreground-muted">반출</span>
                 <span className="font-mono font-semibold">{outRows.length}</span>
                 <span className="text-foreground-muted">건</span>
-                <span className="rounded-full bg-border px-1.5 py-0.5 font-mono text-foreground-muted">
+                <span className="rounded-full bg-border px-2 py-0.5 font-mono text-foreground-muted">
                   계 {rows.length}건
                 </span>
               </span>

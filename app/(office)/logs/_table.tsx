@@ -56,6 +56,21 @@ function statusTone(status: LogStatus): 'neutral' | 'warning' | 'success' {
   return 'neutral';
 }
 
+// 표 공통 타이포 — 기존 text-xs(12px) + h-7 + 넓은 셀 패딩 조합에서는
+// 컬럼에 남는 폭이 부족해 한글 거래처/성상 이름이 줄바꿈되거나 잘려 보였다.
+// 글자를 키우는 대신 셀 패딩을 줄이고, 행간(20px)·필드 높이(32px)·컬럼
+// 최소폭을 함께 잡아 어떤 이름이 와도 잘리지 않게 한다.
+const thClass = 'h-10 whitespace-nowrap text-[12.5px] leading-5';
+
+const inlineFieldClass = cn(
+  'h-8 w-full rounded border border-transparent bg-transparent px-2 text-[13px] leading-5',
+  'focus:border-foreground focus:bg-surface focus:outline-none focus:ring-1 focus:ring-foreground/30',
+  'hover:border-border',
+);
+
+// select 은 네이티브 화살표가 오른쪽을 덮어 글자가 잘리므로 우측 여백을 더 준다.
+const inlineSelectClass = cn(inlineFieldClass, 'pr-6');
+
 // 일보 일자가 속한 달의 시작/끝 (YYYY-MM-DD) — 거래명세표 링크용
 function monthRange(logDate: string): { from: string; to: string } {
   const d = new Date(logDate);
@@ -354,7 +369,9 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
       )}
 
       <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-sm">
-        <Table>
+        {/* 셀 패딩 재정의 — 기본 p-4(16px) 는 좌우 여백이 커서 컬럼 폭을 잡아먹는다.
+            좌우 10px 로 줄여 글자 공간을 확보하고, 상하 12px 로 행 높이를 유지. */}
+        <Table className="[&_td]:px-2.5 [&_td]:py-3 [&_th]:px-2.5 [&_th]:py-2.5">
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">
@@ -366,21 +383,21 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
                   className="h-3.5 w-3.5 rounded border-border"
                 />
               </TableHead>
-              <TableHead>일자</TableHead>
-              <TableHead>구분</TableHead>
-              <TableHead>거래처</TableHead>
-              <TableHead>현장</TableHead>
-              <TableHead>성상</TableHead>
-              <TableHead>차량</TableHead>
-              <TableHead className="text-right">중량(kg)</TableHead>
-              <TableHead className="text-right">단가</TableHead>
-              <TableHead className="text-right">운반비</TableHead>
-              <TableHead className="text-right">공급가</TableHead>
-              <TableHead className="text-right">부가세</TableHead>
-              <TableHead className="text-right">청구금액</TableHead>
-              <TableHead>비고</TableHead>
-              <TableHead>문서</TableHead>
-              <TableHead>상태</TableHead>
+              <TableHead className={thClass}>일자</TableHead>
+              <TableHead className={thClass}>구분</TableHead>
+              <TableHead className={cn(thClass, 'min-w-[128px]')}>거래처</TableHead>
+              <TableHead className={cn(thClass, 'min-w-[136px]')}>현장</TableHead>
+              <TableHead className={cn(thClass, 'min-w-[148px]')}>성상</TableHead>
+              <TableHead className={cn(thClass, 'min-w-[104px]')}>차량</TableHead>
+              <TableHead className={cn(thClass, 'text-right')}>중량(kg)</TableHead>
+              <TableHead className={cn(thClass, 'text-right')}>단가</TableHead>
+              <TableHead className={cn(thClass, 'text-right')}>운반비</TableHead>
+              <TableHead className={cn(thClass, 'text-right')}>공급가</TableHead>
+              <TableHead className={cn(thClass, 'text-right')}>부가세</TableHead>
+              <TableHead className={cn(thClass, 'text-right')}>청구금액</TableHead>
+              <TableHead className={cn(thClass, 'min-w-[120px]')}>비고</TableHead>
+              <TableHead className={thClass}>문서</TableHead>
+              <TableHead className={thClass}>상태</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -548,14 +565,17 @@ function Row({
         />
       </TableCell>
       <TableCell
-        className="font-mono text-xs"
+        className="whitespace-nowrap font-mono text-[13px] leading-5"
         onClick={(e) => e.stopPropagation()}
       >
         <DateEditor logId={row.id} logDate={row.log_date} disabled={isArchived} />
       </TableCell>
       <TableCell>
         {wrap(
-          <Pill tone={row.direction === 'in' ? 'info' : 'primary'}>
+          <Pill
+            tone={row.direction === 'in' ? 'info' : 'primary'}
+            className="whitespace-nowrap px-2.5 py-0.5 text-[11.5px]"
+          >
             {directionLabel[row.direction]}
           </Pill>,
         )}
@@ -580,9 +600,7 @@ function Row({
           onChange={(e) => onChange('site_id', e.target.value)}
           disabled={isArchived}
           className={cn(
-            'h-7 w-full rounded border border-transparent bg-transparent px-1.5 text-xs',
-            'focus:border-foreground focus:bg-surface focus:outline-none focus:ring-1 focus:ring-foreground/30',
-            'hover:border-border',
+            inlineSelectClass,
             isArchived && 'cursor-not-allowed opacity-50',
           )}
         >
@@ -607,9 +625,7 @@ function Row({
           onChange={(e) => onChange('waste_type_id', e.target.value)}
           disabled={isArchived}
           className={cn(
-            'h-7 w-full rounded border border-transparent bg-transparent px-1.5 text-xs',
-            'focus:border-foreground focus:bg-surface focus:outline-none focus:ring-1 focus:ring-foreground/30',
-            'hover:border-border',
+            inlineSelectClass,
             isArchived && 'cursor-not-allowed opacity-50',
           )}
         >
@@ -653,21 +669,21 @@ function Row({
         mono
         disabled={isArchived}
       />
-      <TableCell className="text-right font-mono text-xs">
+      <TableCell className="whitespace-nowrap text-right font-mono text-[13px] leading-5">
         {isDirty ? (
           <span className="text-warning">{formatKRW(calc.supplyAmount)}</span>
         ) : (
           formatKRW(row.supply_amount)
         )}
       </TableCell>
-      <TableCell className="text-right font-mono text-xs">
+      <TableCell className="whitespace-nowrap text-right font-mono text-[13px] leading-5">
         {isDirty ? (
           <span className="text-warning">{formatKRW(calc.vat)}</span>
         ) : (
           formatKRW(row.vat)
         )}
       </TableCell>
-      <TableCell className="text-right font-mono text-xs">
+      <TableCell className="whitespace-nowrap text-right font-mono text-[13px] leading-5">
         {isDirty ? (
           <span className="text-warning">{formatKRW(calc.totalAmount)}</span>
         ) : (
@@ -683,14 +699,14 @@ function Row({
         <div className="flex flex-col items-start gap-1">
           <Link
             href={`/logs/${row.id}/certificate`}
-            className="text-xs text-foreground-secondary hover:text-foreground hover:underline"
+            className="whitespace-nowrap text-[12.5px] leading-5 text-foreground-secondary hover:text-foreground hover:underline"
             title="처리확인서 보기"
           >
             처리확인서
           </Link>
           <Link
             href={`/logs/${row.id}/weight-cert`}
-            className="text-xs text-foreground-secondary hover:text-foreground hover:underline"
+            className="whitespace-nowrap text-[12.5px] leading-5 text-foreground-secondary hover:text-foreground hover:underline"
             title="계량증명서 보기"
           >
             계량증명서
@@ -700,7 +716,7 @@ function Row({
       <TableCell onClick={(e) => e.stopPropagation()}>
         <div className="flex flex-col items-start gap-1">
           <Link href={detailHref}>
-            <Pill tone={statusTone(row.status)} dot>
+            <Pill tone={statusTone(row.status)} dot className="whitespace-nowrap px-2.5 py-0.5 text-[11.5px]">
               {statusLabelMap[row.status]}
             </Pill>
           </Link>
@@ -752,10 +768,8 @@ function CellEditable({
         disabled={disabled}
         autoComplete="off"
         className={cn(
-          'h-7 w-full rounded border border-transparent bg-transparent px-1.5 text-xs',
+          inlineFieldClass,
           'placeholder:text-foreground-dim',
-          'focus:border-foreground focus:bg-surface focus:outline-none focus:ring-1 focus:ring-foreground/30',
-          'hover:border-border',
           align === 'right' && 'text-right',
           mono && 'font-mono',
           disabled && 'cursor-not-allowed opacity-50',
@@ -803,13 +817,15 @@ function FlagToggle({
       disabled={disabled || pending}
       title={`${labelOn === '청구' ? '청구 상태' : '결재 상태'} 토글`}
       className={cn(
-        'inline-flex h-[20px] cursor-pointer items-center rounded-full transition-shadow',
+        'inline-flex h-[22px] cursor-pointer items-center rounded-full transition-shadow',
         'hover:ring-2 hover:ring-foreground/20',
         'focus:outline-none focus:ring-2 focus:ring-foreground/40',
         (disabled || pending) && 'cursor-not-allowed opacity-60',
       )}
     >
-      <Pill tone={value ? 'info' : 'danger'}>{value ? labelOn : labelOff}</Pill>
+      <Pill tone={value ? 'info' : 'danger'} className="whitespace-nowrap px-2.5 py-0.5 text-[11.5px]">
+        {value ? labelOn : labelOff}
+      </Pill>
     </button>
   );
 }
@@ -870,7 +886,7 @@ function DateEditor({
           if (e.key === 'Enter') commit((e.target as HTMLInputElement).value);
           if (e.key === 'Escape') setEditing(false);
         }}
-        className="h-7 w-[130px] rounded border border-foreground bg-surface px-1.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+        className="h-8 w-[138px] rounded border border-foreground bg-surface px-2 font-mono text-[13px] leading-5 focus:outline-none focus:ring-1 focus:ring-foreground/30"
       />
     );
   }
@@ -881,7 +897,7 @@ function DateEditor({
       onClick={() => setEditing(true)}
       disabled={pending}
       title="클릭하여 일자 수정"
-      className="cursor-pointer text-left font-mono text-xs hover:underline disabled:opacity-60"
+      className="cursor-pointer whitespace-nowrap text-left font-mono text-[13px] leading-5 hover:underline disabled:opacity-60"
     >
       {formatDate(optimistic)}
     </button>
@@ -943,7 +959,7 @@ function CompanyEditor({
   };
 
   if (disabled) {
-    return <span className="text-xs">{optimistic?.name ?? '—'}</span>;
+    return <span className="text-[13px] leading-5">{optimistic?.name ?? '—'}</span>;
   }
 
   return (
@@ -957,7 +973,7 @@ function CompanyEditor({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="거래처 검색..."
-              className="h-7 w-full rounded border border-foreground bg-surface px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+              className="h-8 w-full rounded border border-foreground bg-surface px-2 text-[13px] leading-5 focus:outline-none focus:ring-1 focus:ring-foreground/30"
             />
             {filtered.length > 0 && (
               <div className="absolute left-0 top-full z-40 mt-0.5 max-h-48 w-48 overflow-y-auto rounded-md border border-border bg-surface py-1 shadow-lg">
@@ -974,7 +990,7 @@ function CompanyEditor({
                         setEditing(false);
                       }
                     }}
-                    className="block w-full px-3 py-1.5 text-left text-xs hover:bg-background-subtle"
+                    className="block w-full px-3 py-1.5 text-left text-[13px] leading-5 hover:bg-background-subtle"
                   >
                     {c.name}
                   </button>
@@ -987,7 +1003,7 @@ function CompanyEditor({
             type="button"
             onClick={() => setEditing(true)}
             disabled={pending}
-            className="text-left text-xs font-medium text-foreground hover:underline disabled:opacity-60"
+            className="text-left text-[13px] font-medium leading-5 text-foreground hover:underline disabled:opacity-60"
           >
             {optimistic?.name ?? '—'}
           </button>

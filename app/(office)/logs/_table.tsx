@@ -37,7 +37,7 @@ import {
   type BulkUpdateResult,
 } from '@/actions/waste-logs';
 import { calcBilling } from '@/lib/calc/billing';
-import { formatKRW, formatNumber, formatDate } from '@/lib/format';
+import { formatNumber, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { LogStatus, Direction, BillingType } from '@/lib/types/database';
 
@@ -70,6 +70,12 @@ const inlineFieldClass = cn(
 
 // select 은 네이티브 화살표가 오른쪽을 덮어 글자가 잘리므로 우측 여백을 더 준다.
 const inlineSelectClass = cn(inlineFieldClass, 'pr-6');
+
+const numColClass = 'text-right';
+
+// 목록에서 부가세 컬럼은 뺐다 — 공급가의 10% 라 언제든 되짚을 수 있는 파생값인데
+// 컬럼 폭은 가장 많이 잡아먹어서, 그 폭을 단가·공급가·청구금액에 넘겼다.
+// (부가세 원값은 일보 상세 화면 /logs/[id] 에 그대로 있다.)
 
 // 일보 일자가 속한 달의 시작/끝 (YYYY-MM-DD) — 거래명세표 링크용
 function monthRange(logDate: string): { from: string; to: string } {
@@ -386,16 +392,18 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
               <TableHead className={thClass}>일자</TableHead>
               <TableHead className={thClass}>구분</TableHead>
               <TableHead className={cn(thClass, 'min-w-[128px]')}>거래처</TableHead>
-              <TableHead className={cn(thClass, 'min-w-[136px]')}>현장</TableHead>
+              <TableHead className={cn(thClass, 'min-w-[160px]')}>현장</TableHead>
               <TableHead className={cn(thClass, 'min-w-[148px]')}>성상</TableHead>
               <TableHead className={cn(thClass, 'min-w-[104px]')}>차량</TableHead>
-              <TableHead className={cn(thClass, 'text-right')}>중량(kg)</TableHead>
-              <TableHead className={cn(thClass, 'text-right')}>단가</TableHead>
-              <TableHead className={cn(thClass, 'text-right')}>운반비</TableHead>
-              <TableHead className={cn(thClass, 'text-right')}>공급가</TableHead>
-              <TableHead className={cn(thClass, 'text-right')}>부가세</TableHead>
-              <TableHead className={cn(thClass, 'text-right')}>청구금액</TableHead>
-              <TableHead className={cn(thClass, 'min-w-[120px]')}>비고</TableHead>
+              {/* 숫자 컬럼은 최소 폭을 못 박아 둔다 — 없으면 브라우저가 표를
+                  컨테이너 폭에 욱여넣느라 단가(45px)·운반비(58px) 같은 칸부터
+                  짓눌러 값이 잘린다. 폭은 9자리(예: 1,280,000) 기준. */}
+              <TableHead className={cn(thClass, numColClass, 'min-w-[112px]')}>중량(kg)</TableHead>
+              <TableHead className={cn(thClass, numColClass, 'min-w-[112px]')}>단가</TableHead>
+              <TableHead className={cn(thClass, numColClass, 'min-w-[112px]')}>운반비</TableHead>
+              <TableHead className={cn(thClass, numColClass, 'min-w-[108px]')}>공급가(원)</TableHead>
+              <TableHead className={cn(thClass, numColClass, 'min-w-[116px]')}>청구금액(원)</TableHead>
+              <TableHead className={cn(thClass, 'min-w-[88px]')}>비고</TableHead>
               <TableHead className={thClass}>문서</TableHead>
               <TableHead className={thClass}>상태</TableHead>
             </TableRow>
@@ -544,6 +552,13 @@ function Row({
     !selected && !isDirty && isArchived && 'opacity-60',
   );
 
+  // 이름이 긴 현장·성상은 select 폭을 넘길 수 있어 hover 툴팁으로 전체를 보여준다
+  const selectedSiteName =
+    sites.find((x) => x.id === state.site_id)?.name ?? row.sites?.name;
+  const selectedWasteName =
+    wasteTypes.find((w) => w.id === state.waste_type_id)?.name ??
+    row.waste_types?.name;
+
   // 상세 페이지로의 링크 — 텍스트 셀(일자/구분/현장/성상)만 적용
   const detailHref = `/logs/${row.id}`;
   const wrap = (children: React.ReactNode) => (
@@ -599,6 +614,7 @@ function Row({
           value={state.site_id}
           onChange={(e) => onChange('site_id', e.target.value)}
           disabled={isArchived}
+          title={selectedSiteName}
           className={cn(
             inlineSelectClass,
             isArchived && 'cursor-not-allowed opacity-50',
@@ -624,6 +640,7 @@ function Row({
           value={state.waste_type_id}
           onChange={(e) => onChange('waste_type_id', e.target.value)}
           disabled={isArchived}
+          title={selectedWasteName}
           className={cn(
             inlineSelectClass,
             isArchived && 'cursor-not-allowed opacity-50',
@@ -671,23 +688,16 @@ function Row({
       />
       <TableCell className="whitespace-nowrap text-right font-mono text-[13px] leading-5">
         {isDirty ? (
-          <span className="text-warning">{formatKRW(calc.supplyAmount)}</span>
+          <span className="text-warning">{formatNumber(calc.supplyAmount)}</span>
         ) : (
-          formatKRW(row.supply_amount)
+          formatNumber(row.supply_amount)
         )}
       </TableCell>
       <TableCell className="whitespace-nowrap text-right font-mono text-[13px] leading-5">
         {isDirty ? (
-          <span className="text-warning">{formatKRW(calc.vat)}</span>
+          <span className="text-warning">{formatNumber(calc.totalAmount)}</span>
         ) : (
-          formatKRW(row.vat)
-        )}
-      </TableCell>
-      <TableCell className="whitespace-nowrap text-right font-mono text-[13px] leading-5">
-        {isDirty ? (
-          <span className="text-warning">{formatKRW(calc.totalAmount)}</span>
-        ) : (
-          formatKRW(row.total_amount)
+          formatNumber(row.total_amount)
         )}
       </TableCell>
       <CellEditable

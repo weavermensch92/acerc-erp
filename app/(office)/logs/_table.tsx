@@ -68,7 +68,36 @@ const thClassBase = 'h-10 whitespace-nowrap text-[12.5px] leading-5';
 const stickyHeadClass =
   'sticky top-0 z-20 bg-surface shadow-[inset_0_-1px_0_0_theme(colors.border.DEFAULT)]';
 
+// 세로 고정 + 가로 고정이 겹치는 헤더는 아래선·오른쪽선을 함께 그린다
+const stickyHeadCornerClass =
+  'lg:shadow-[inset_0_-1px_0_0_theme(colors.border.DEFAULT),inset_-1px_0_0_0_theme(colors.border.DEFAULT)]';
+
 const thClass = cn(thClassBase, stickyHeadClass);
+
+// 좌측 고정 열 — 가로로 밀어도 일자·구분·거래처는 남는다 (36+144+64+128=372px).
+//
+// left 오프셋은 앞 컬럼 폭을 더한 값이라 폭이 흔들리면 어긋난다. 표가 컨테이너보다
+// 넓으면 브라우저가 컬럼을 줄이는데 w- 는 제안값이라 무시되므로, 실제 폭이
+// 오프셋보다 좁아져 그 틈으로 지나가는 셀이 보인다. min/max 까지 함께 못 박는 이유.
+// 일자 144px 은 편집 시 뜨는 date input 이 잘리지 않는 최소 폭(124px+패딩) 기준.
+//
+// 좁은 화면(lg 미만)에서는 372px 를 붙박이로 내주면 볼 폭이 얼마 안 남으므로
+// 가로 고정은 lg 이상에서만 건다. 폭 고정은 화면 크기와 무관하게 유지.
+const FROZEN = {
+  check: 'w-[36px] min-w-[36px] max-w-[36px] lg:sticky lg:left-0',
+  date: 'w-[144px] min-w-[144px] max-w-[144px] lg:sticky lg:left-[36px]',
+  direction: 'w-[64px] min-w-[64px] max-w-[64px] lg:sticky lg:left-[180px]',
+  // 마지막 고정 열에는 오른쪽 경계선을 그어 어디까지 고정인지 보이게 한다
+  // focus-within — 거래처 자동완성 목록은 칸 밖으로 넘치는데, 고정 열끼리는
+  // 뒤 행이 위에 그려져 목록을 덮는다. 편집 중인 칸만 위로 올린다.
+  company:
+    'w-[128px] min-w-[128px] max-w-[128px] focus-within:z-30 lg:sticky lg:left-[244px] lg:shadow-[inset_-1px_0_0_0_theme(colors.border.DEFAULT)]',
+} as const;
+
+// 헤더의 고정 열은 세로·가로 양쪽으로 붙으므로 나머지 헤더(z-20)보다 위에 둔다
+const frozenHeadClass = 'z-30';
+// 본문의 고정 열은 지나가는 셀 위에 떠야 한다
+const frozenCellClass = 'z-10';
 
 const inlineFieldClass = cn(
   'h-8 w-full rounded border border-transparent bg-transparent px-2 text-[13px] leading-5',
@@ -391,7 +420,7 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
         >
           <TableHeader>
             <TableRow>
-              <TableHead className={cn(stickyHeadClass, 'w-10')}>
+              <TableHead className={cn(stickyHeadClass, frozenHeadClass, FROZEN.check)}>
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -400,9 +429,22 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
                   className="h-3.5 w-3.5 rounded border-border"
                 />
               </TableHead>
-              <TableHead className={thClass}>일자</TableHead>
-              <TableHead className={thClass}>구분</TableHead>
-              <TableHead className={cn(thClass, 'min-w-[128px]')}>거래처</TableHead>
+              <TableHead className={cn(thClass, frozenHeadClass, FROZEN.date)}>
+                일자
+              </TableHead>
+              <TableHead className={cn(thClass, frozenHeadClass, FROZEN.direction)}>
+                구분
+              </TableHead>
+              <TableHead
+                className={cn(
+                  thClass,
+                  frozenHeadClass,
+                  FROZEN.company,
+                  stickyHeadCornerClass,
+                )}
+              >
+                거래처
+              </TableHead>
               <TableHead className={cn(thClass, 'min-w-[160px]')}>현장</TableHead>
               <TableHead className={cn(thClass, 'min-w-[148px]')}>성상</TableHead>
               <TableHead className={cn(thClass, 'min-w-[104px]')}>차량</TableHead>
@@ -556,12 +598,26 @@ function Row({
     transportFee: state.transport_fee ? Number(state.transport_fee) : 0,
   });
   const rowClass = cn(
-    'transition-colors',
+    'group transition-colors',
     selected && 'bg-info-bg/40',
     isDirty && 'bg-warning-bg/30',
     !selected && !isDirty && row.status === 'pending_review' && 'bg-warning-bg/40',
-    !selected && !isDirty && isArchived && 'opacity-60',
+    // 보관 행은 opacity 로 흐리게 하면 고정 열까지 반투명해져 뒤 내용이 비친다.
+    // 입력칸은 이미 disabled 로 흐려지므로 글자색만 낮춘다.
+    !selected && !isDirty && isArchived && 'text-foreground-muted',
   );
+
+  // 고정 열 배경 — 행 상태색을 흰 바탕에 미리 섞은 불투명 값
+  // (bg-info-bg/40 → #F1F7FF, bg-warning-bg/30 → #FFFBEE, /40 → #FFFAE9,
+  //  hover:bg-foreground/[0.04] → #F5F5F5)
+  const frozenBg = isDirty
+    ? 'bg-[#FFFBEE]'
+    : selected
+      ? 'bg-[#F1F7FF]'
+      : row.status === 'pending_review'
+        ? 'bg-[#FFFAE9]'
+        : 'bg-surface group-hover:bg-[#F5F5F5]';
+  const frozenCell = cn(frozenCellClass, frozenBg);
 
   // 이름이 긴 현장·성상은 select 폭을 넘길 수 있어 hover 툴팁으로 전체를 보여준다
   const selectedSiteName =
@@ -580,7 +636,10 @@ function Row({
 
   return (
     <TableRow className={rowClass}>
-      <TableCell onClick={(e) => e.stopPropagation()}>
+      <TableCell
+        className={cn(frozenCell, FROZEN.check)}
+        onClick={(e) => e.stopPropagation()}
+      >
         <input
           type="checkbox"
           checked={selected}
@@ -591,12 +650,16 @@ function Row({
         />
       </TableCell>
       <TableCell
-        className="whitespace-nowrap font-mono text-[13px] leading-5"
+        className={cn(
+          frozenCell,
+          FROZEN.date,
+          'whitespace-nowrap font-mono text-[13px] leading-5',
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <DateEditor logId={row.id} logDate={row.log_date} disabled={isArchived} />
       </TableCell>
-      <TableCell>
+      <TableCell className={cn(frozenCell, FROZEN.direction)}>
         {wrap(
           <Pill
             tone={row.direction === 'in' ? 'info' : 'primary'}
@@ -607,7 +670,11 @@ function Row({
         )}
       </TableCell>
       <TableCell
-        className="font-medium"
+        className={cn(
+          frozenCell,
+          FROZEN.company,
+          'font-medium',
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <CompanyEditor
@@ -907,7 +974,7 @@ function DateEditor({
           if (e.key === 'Enter') commit((e.target as HTMLInputElement).value);
           if (e.key === 'Escape') setEditing(false);
         }}
-        className="h-8 w-[138px] rounded border border-foreground bg-surface px-2 font-mono text-[13px] leading-5 focus:outline-none focus:ring-1 focus:ring-foreground/30"
+        className="h-8 w-full rounded border border-foreground bg-surface px-2 font-mono text-[13px] leading-5 focus:outline-none focus:ring-1 focus:ring-foreground/30"
       />
     );
   }

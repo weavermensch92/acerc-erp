@@ -3,9 +3,11 @@ import { cn } from '@/lib/utils'
 
 export const Table = React.forwardRef<
   HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
+  React.HTMLAttributes<HTMLTableElement> & { wrapperClassName?: string }
+>(({ className, wrapperClassName, ...props }, ref) => (
+  // 감싸는 div 는 기본이 스크롤 박스 — sticky 헤더를 쓰려면 바깥에서
+  // overflow-visible 로 꺼서 스크롤을 상위 컨테이너 한 곳으로 모아야 한다.
+  <div className={cn('relative w-full overflow-auto', wrapperClassName)}>
     <table
       ref={ref}
       className={cn('w-full caption-bottom text-sm', className)}

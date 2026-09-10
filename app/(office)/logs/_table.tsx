@@ -60,7 +60,15 @@ function statusTone(status: LogStatus): 'neutral' | 'warning' | 'success' {
 // 컬럼에 남는 폭이 부족해 한글 거래처/성상 이름이 줄바꿈되거나 잘려 보였다.
 // 글자를 키우는 대신 셀 패딩을 줄이고, 행간(20px)·필드 높이(32px)·컬럼
 // 최소폭을 함께 잡아 어떤 이름이 와도 잘리지 않게 한다.
-const thClass = 'h-10 whitespace-nowrap text-[12.5px] leading-5';
+const thClassBase = 'h-10 whitespace-nowrap text-[12.5px] leading-5';
+
+// 헤더 행 고정 — 아래로 스크롤해도 컬럼 이름이 표 위에 붙어 있는다.
+// 배경을 칠하지 않으면 지나가는 행이 글자 뒤로 비쳐 보이고, tr 의 border 는
+// sticky 상태에서 같이 밀려 사라지므로 아래 선은 box-shadow 로 그린다.
+const stickyHeadClass =
+  'sticky top-0 z-20 bg-surface shadow-[inset_0_-1px_0_0_theme(colors.border.DEFAULT)]';
+
+const thClass = cn(thClassBase, stickyHeadClass);
 
 const inlineFieldClass = cn(
   'h-8 w-full rounded border border-transparent bg-transparent px-2 text-[13px] leading-5',
@@ -311,10 +319,10 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
   }
 
   return (
-    <>
-      {/* 선택 액션 바 */}
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* 선택 액션 바 — 스크롤 박스 바깥이라 그대로 화면에 남는다 */}
       {selected.size > 0 && (
-        <div className="sticky top-0 z-10 mb-3 flex items-center justify-between gap-3 rounded-[10px] border border-foreground bg-surface px-4 py-2.5 shadow-md">
+        <div className="mb-3 flex flex-shrink-0 items-center justify-between gap-3 rounded-[10px] border border-foreground bg-surface px-4 py-2.5 shadow-md">
           <div className="flex items-center gap-2 text-sm">
             <span className="font-mono font-semibold">{selected.size}</span>
             <span className="text-foreground-muted">건 선택됨</span>
@@ -374,13 +382,16 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-sm">
+      <div className="min-h-0 overflow-auto rounded-lg border border-border bg-surface shadow-sm">
         {/* 셀 패딩 재정의 — 기본 p-4(16px) 는 좌우 여백이 커서 컬럼 폭을 잡아먹는다.
             좌우 10px 로 줄여 글자 공간을 확보하고, 상하 12px 로 행 높이를 유지. */}
-        <Table className="[&_td]:px-2.5 [&_td]:py-3 [&_th]:px-2.5 [&_th]:py-2.5">
+        <Table
+          wrapperClassName="overflow-visible"
+          className="[&_td]:px-2.5 [&_td]:py-3 [&_th]:px-2.5 [&_th]:py-2.5"
+        >
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">
+              <TableHead className={cn(stickyHeadClass, 'w-10')}>
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -435,7 +446,7 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
 
       {/* 인라인 편집 저장 바 */}
       {dirtyIds.length > 0 && (
-        <div className="sticky bottom-4 z-10 mt-3 flex flex-wrap items-center gap-3 rounded-[10px] border border-warning bg-surface p-4 shadow-md">
+        <div className="mt-3 flex flex-shrink-0 flex-wrap items-center gap-3 rounded-[10px] border border-warning bg-surface p-4 shadow-md">
           <div className="flex items-center gap-2 text-sm">
             <AlertTriangle className="h-4 w-4 text-warning" strokeWidth={1.75} />
             <span className="font-semibold">{dirtyIds.length}건</span> 변경됨
@@ -510,7 +521,7 @@ export function LogsTable({ rows, companies = [], sitesByCompany = {}, wasteType
           </div>
         </div>
       </Modal>
-    </>
+    </div>
   );
 }
 

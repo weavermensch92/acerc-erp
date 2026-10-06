@@ -37,6 +37,7 @@ interface SpreadsheetRow {
   weight_tare_kg: string;
   unit_price: string;
   transport_fee: string;
+  is_paid: boolean;
   note: string;
 }
 
@@ -68,6 +69,7 @@ const blankRow = (date?: string): SpreadsheetRow => ({
   weight_tare_kg: '',
   unit_price: '',
   transport_fee: '0',
+  is_paid: false,
   note: '',
 });
 
@@ -169,6 +171,15 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
     setBulkDate('');
   };
 
+  // 선택 행에 결재 완료 일괄 적용/해제 (저장 전 로컬 상태만 변경)
+  const applyBulkPaid = (paid: boolean) => {
+    if (selected.size === 0) return;
+    setRows((prev) =>
+      prev.map((r, i) => (selected.has(i) ? { ...r, is_paid: paid } : r)),
+    );
+    setSelected(new Set());
+  };
+
   const isRowEmpty = (r: SpreadsheetRow) =>
     !r.company_name.trim() &&
     !r.waste_type_name.trim() &&
@@ -238,7 +249,7 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
         vat: c.vat,
         total_amount: c.totalAmount,
         is_invoiced: false,
-        is_paid: false,
+        is_paid: r.is_paid,
         note: r.note.trim() || null,
       };
     });
@@ -308,6 +319,14 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
               {selected.size}행 일자 적용
             </Button>
             <span className="h-4 w-px bg-border" />
+            <Button type="button" size="sm" variant="outline" onClick={() => applyBulkPaid(true)}>
+              <CheckCircle2 className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
+              결재완료 적용
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => applyBulkPaid(false)}>
+              결재완료 해제
+            </Button>
+            <span className="h-4 w-px bg-border" />
             <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               <X className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />선택 해제
             </Button>
@@ -343,6 +362,7 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
               <Th className="w-20 text-right">단가</Th>
               <Th className="w-20 text-right">운반비</Th>
               <Th className="w-32 text-right">청구금액 (자동)</Th>
+              <Th className="w-14 text-center" title="결재 완료 (반입: 입금 / 반출: 지급)">결재완료</Th>
               <Th className="w-40">비고</Th>
               <Th className="w-8"></Th>
             </tr>
@@ -483,6 +503,15 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
                       </span>
                     )}
                   </Td>
+                  <Td className="text-center">
+                    <input
+                      type="checkbox"
+                      checked={r.is_paid}
+                      onChange={(e) => updateRow(i, 'is_paid', e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-border"
+                      aria-label={`${i + 1}행 결재 완료`}
+                    />
+                  </Td>
                   <Td>
                     <CellInput
                       value={r.note}
@@ -596,9 +625,18 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
   );
 }
 
-function Th({ children, className }: { children?: React.ReactNode; className?: string }) {
+function Th({
+  children,
+  className,
+  title,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+  title?: string;
+}) {
   return (
     <th
+      title={title}
       className={cn(
         'border-r border-divider px-2 py-2 text-left text-[10.5px] font-medium text-foreground-muted last:border-0',
         className,

@@ -171,6 +171,15 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
     setBulkDate('');
   };
 
+  // 선택 행에 결재 완료 일괄 적용/해제 (저장 전 로컬 상태만 변경)
+  const applyBulkPaid = (paid: boolean) => {
+    if (selected.size === 0) return;
+    setRows((prev) =>
+      prev.map((r, i) => (selected.has(i) ? { ...r, is_paid: paid } : r)),
+    );
+    setSelected(new Set());
+  };
+
   const isRowEmpty = (r: SpreadsheetRow) =>
     !r.company_name.trim() &&
     !r.waste_type_name.trim() &&
@@ -308,6 +317,14 @@ export function BulkLogClient({ companies, wasteTypes, treatmentPlants }: Props)
             >
               <CalendarDays className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
               {selected.size}행 일자 적용
+            </Button>
+            <span className="h-4 w-px bg-border" />
+            <Button type="button" size="sm" variant="outline" onClick={() => applyBulkPaid(true)}>
+              <CheckCircle2 className="mr-1 h-3.5 w-3.5" strokeWidth={1.75} />
+              결재완료 적용
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => applyBulkPaid(false)}>
+              결재완료 해제
             </Button>
             <span className="h-4 w-px bg-border" />
             <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}>

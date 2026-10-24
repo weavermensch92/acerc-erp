@@ -146,6 +146,53 @@ export async function updateCompanyAction(
 }
 
 // ========================================
+// 거래처명만 변경 — 미청구 처리 화면 등에서 인라인 수정용 (다른 필드는 건드리지 않음)
+// ========================================
+export async function renameCompanyAction(
+  id: string,
+  name: string,
+): Promise<CompanyActionResult> {
+  const parsed = z
+    .string()
+    .trim()
+    .min(1, '거래처명을 입력하세요')
+    .max(200)
+    .safeParse(name);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join(', ') };
+  }
+  if (!id) return { ok: false, error: '거래처 id 누락' };
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('companies')
+    .update({ name: parsed.data })
+    .eq('id', id);
+  if (error) {
+    if (error.code === '23505') {
+      const { data: dup } = await supabase
+        .from('companies')
+        .select('id, name')
+        .eq('name', parsed.data)
+        .eq('is_deleted', false)
+        .neq('id', id)
+        .maybeSingle();
+      return {
+        ok: false,
+        error: '같은 이름의 거래처가 이미 등록되어 있습니다. 병합 기능을 이용하세요.',
+        conflict: dup ? { id: dup.id as string, name: dup.name as string } : undefined,
+      };
+    }
+    return { ok: false, error: error.message };
+  }
+  revalidatePath('/companies');
+  revalidatePath(`/companies/${id}`);
+  revalidatePath('/pending');
+  revalidatePath('/invoices');
+  revalidatePath('/logs');
+  return { ok: true, companyId: id };
+}
+
+// ========================================
 // 거래처 삭제 (soft delete) — 기존 일보 보존, 신규 입력·자동완성에서 제외
 // share_token 도 자동 nullify (외부 접근 차단)
 // ========================================

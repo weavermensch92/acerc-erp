@@ -14,6 +14,10 @@ import {
   RotateCcw,
   GitMerge,
   ArrowRightLeft,
+  Search,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/erp/Pill';
@@ -32,6 +36,7 @@ import {
 } from '@/actions/waste-logs';
 import {
   mergeCompaniesAction,
+  renameCompanyAction,
   getCompaniesMergeCountsAction,
   type CompanyMergeCounts,
 } from '@/actions/companies';
@@ -107,6 +112,12 @@ export function PendingClient({
   // 병합용 거래처 체크 선택
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [mergeOpen, setMergeOpen] = useState(false);
+  // 거래처명 검색 (공백 무시, 대소문자 무시)
+  const [query, setQuery] = useState('');
+  // 거래처명 인라인 수정
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [isRenaming, startRenameTransition] = useTransition();
 
   if (groups.length === 0) {
     return (
@@ -144,6 +155,39 @@ export function PendingClient({
 
   const checkedGroups = groups.filter((g) => checked.has(g.companyId));
 
+  const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+  const q = normalize(query);
+  const visibleGroups = q
+    ? groups.filter((g) => normalize(g.companyName).includes(q))
+    : groups;
+
+  const startRename = (g: CompanyGroup) => {
+    setError(null);
+    setRenamingId(g.companyId);
+    setRenameValue(g.companyName);
+  };
+  const cancelRename = () => {
+    setRenamingId(null);
+    setRenameValue('');
+  };
+  const submitRename = (g: CompanyGroup) => {
+    const next = renameValue.trim();
+    if (!next || next === g.companyName) {
+      cancelRename();
+      return;
+    }
+    setError(null);
+    startRenameTransition(async () => {
+      const r = await renameCompanyAction(g.companyId, next);
+      if (!r.ok) {
+        setError(r.error ?? '거래처명 수정 실패');
+        return;
+      }
+      cancelRename();
+      router.refresh();
+    });
+  };
+
   const onProcessGroup = (g: CompanyGroup) => {
     setError(null);
     setPendingId(g.companyId);
@@ -164,6 +208,40 @@ export function PendingClient({
 
   return (
     <div className="space-y-3">
+      {/* 거래처 검색 */}
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
+        <div className="relative w-full max-w-sm">
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-muted"
+            strokeWidth={1.75}
+          />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="거래처명 검색"
+            aria-label="거래처명 검색"
+            autoComplete="off"
+            className="h-9 w-full rounded-md border border-border bg-surface pl-8 pr-8 text-sm placeholder:text-foreground-muted focus:border-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-foreground-muted hover:text-foreground"
+              aria-label="검색어 지우기"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+            </button>
+          )}
+        </div>
+        {q && (
+          <span className="text-[11.5px] text-foreground-muted">
+            {visibleGroups.length} / {groups.length}곳
+          </span>
+        )}
+      </div>
+
       {error && (
         <div className="flex items-center gap-2 rounded-md border border-danger/40 bg-danger-bg/60 px-3 py-2 text-xs text-danger">
           <AlertTriangle className="h-4 w-4" strokeWidth={1.75} />
@@ -210,9 +288,16 @@ export function PendingClient({
         }}
       />
 
-      {groups.map((g) => {
+      {q && visibleGroups.length === 0 && (
+        <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center text-sm text-foreground-muted">
+          &lsquo;{query.trim()}&rsquo; 에 해당하는 거래처가 없습니다.
+        </div>
+      )}
+
+      {visibleGroups.map((g) => {
         const isOpen = expanded.has(g.companyId);
         const isProcessing = pendingId === g.companyId;
+        const isEditingName = renamingId === g.companyId;
         const linkHref = isInbound
           ? `/invoices?company=${g.companyId}&from=${g.oldestDate}&to=${g.latestDate}`
           : `/payouts`;
@@ -231,22 +316,88 @@ export function PendingClient({
                 aria-label={`${g.companyName} 병합 선택`}
                 title="병합할 거래처 선택"
               />
-              <button
-                type="button"
-                onClick={() => toggle(g.companyId)}
-                className="flex flex-1 items-center gap-2 text-left"
-              >
-                {isOpen ? (
-                  <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
+              <div className="flex flex-1 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggle(g.companyId)}
+                  className="flex items-center gap-2 text-left"
+                  aria-label={isOpen ? '접기' : '펼치기'}
+                >
+                  {isOpen ? (
+                    <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+                  )}
+                  {!isEditingName && (
+                    <span className="text-sm font-semibold">{g.companyName}</span>
+                  )}
+                </button>
+                {isEditingName ? (
+                  <form
+                    className="flex items-center gap-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      submitRename(g);
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') cancelRename();
+                      }}
+                      autoFocus
+                      disabled={isRenaming}
+                      aria-label="거래처명"
+                      className="h-8 w-56 rounded-md border border-foreground bg-surface px-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-foreground/30"
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={isRenaming || !renameValue.trim()}
+                      title="거래처명 저장 (Enter)"
+                    >
+                      {isRenaming ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={cancelRename}
+                      disabled={isRenaming}
+                      title="취소 (Esc)"
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={2} />
+                    </Button>
+                  </form>
                 ) : (
-                  <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+                  <button
+                    type="button"
+                    onClick={() => startRename(g)}
+                    className="rounded p-1 text-foreground-muted hover:bg-background-subtle hover:text-foreground"
+                    aria-label={`${g.companyName} 거래처명 수정`}
+                    title="거래처명 수정"
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  </button>
                 )}
-                <span className="text-sm font-semibold">{g.companyName}</span>
-                <Pill tone="warning">{formatNumber(g.count)}건</Pill>
-                <span className="text-[11.5px] text-foreground-muted">
-                  {formatDate(g.oldestDate)} ~ {formatDate(g.latestDate)}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => toggle(g.companyId)}
+                  className="flex flex-1 items-center gap-2 self-stretch text-left"
+                  tabIndex={-1}
+                >
+                  <Pill tone="warning">{formatNumber(g.count)}건</Pill>
+                  <span className="text-[11.5px] text-foreground-muted">
+                    {formatDate(g.oldestDate)} ~ {formatDate(g.latestDate)}
+                  </span>
+                </button>
+              </div>
 
               <div className="flex items-center gap-3">
                 <div className="text-right">
@@ -497,6 +648,8 @@ interface EditState {
   unit_price: string;
   transport_fee: string;
   note: string;
+  is_invoiced: boolean;
+  is_paid: boolean;
 }
 
 function toEditState(l: PendingLogRow): EditState {
@@ -508,6 +661,8 @@ function toEditState(l: PendingLogRow): EditState {
     unit_price: l.unit_price !== null ? String(l.unit_price) : '',
     transport_fee: l.transport_fee !== null ? String(l.transport_fee) : '',
     note: l.note ?? '',
+    is_invoiced: l.is_invoiced,
+    is_paid: l.is_paid,
   };
 }
 
@@ -519,7 +674,9 @@ function editStatesEqual(a: EditState, b: EditState): boolean {
     a.weight_kg === b.weight_kg &&
     a.unit_price === b.unit_price &&
     a.transport_fee === b.transport_fee &&
-    a.note === b.note
+    a.note === b.note &&
+    a.is_invoiced === b.is_invoiced &&
+    a.is_paid === b.is_paid
   );
 }
 
@@ -628,8 +785,8 @@ function LogsTable({
         unit_price: s.unit_price ? Number(s.unit_price) : null,
         transport_fee: s.transport_fee ? Number(s.transport_fee) : 0,
         billing_type: row.billing_type,
-        is_invoiced: row.is_invoiced,
-        is_paid: row.is_paid,
+        is_invoiced: s.is_invoiced,
+        is_paid: s.is_paid,
         note: s.note.trim() || null,
         waste_type_id: s.waste_type_id || null,
         site_id: s.site_id || null,
@@ -648,6 +805,22 @@ function LogsTable({
   };
 
   const onResetEdits = () => setEdited({});
+
+  // 청구/입금 열 전체 체크 — 편집 버퍼에 반영 (저장 버튼으로 확정)
+  const allFlag = (field: 'is_invoiced' | 'is_paid') =>
+    logs.length > 0 && logs.every((l) => stateOf(l.id)[field]);
+  const setAllFlag = (field: 'is_invoiced' | 'is_paid', value: boolean) => {
+    setEdited((prev) => {
+      const next = { ...prev };
+      for (const l of logs) {
+        const cur = prev[l.id] ?? initial[l.id];
+        next[l.id] = { ...cur, [field]: value };
+      }
+      return next;
+    });
+  };
+  const invoiceColLabel = isInbound ? '청구' : '청구서';
+  const paidColLabel = isInbound ? '입금' : '지급';
 
   // 선택 건 거래처 이동 (분리) — 잘못 묶인 일보를 다른 거래처로 옮김
   const onMove = () => {
@@ -689,7 +862,28 @@ function LogsTable({
             <th className="px-2 py-1.5 text-right font-medium">금액</th>
             <th className="px-2 py-1.5 text-left font-medium">비고</th>
             <th className="px-2 py-1.5 text-center font-medium">
-              {isInbound ? '입금' : '지급'}
+              <label className="inline-flex cursor-pointer items-center gap-1">
+                <input
+                  type="checkbox"
+                  aria-label={`${invoiceColLabel} 완료 전체`}
+                  className="h-3.5 w-3.5 rounded border-border"
+                  checked={allFlag('is_invoiced')}
+                  onChange={(e) => setAllFlag('is_invoiced', e.target.checked)}
+                />
+                {invoiceColLabel}
+              </label>
+            </th>
+            <th className="px-2 py-1.5 text-center font-medium">
+              <label className="inline-flex cursor-pointer items-center gap-1">
+                <input
+                  type="checkbox"
+                  aria-label={`${paidColLabel} 완료 전체`}
+                  className="h-3.5 w-3.5 rounded border-border"
+                  checked={allFlag('is_paid')}
+                  onChange={(e) => setAllFlag('is_paid', e.target.checked)}
+                />
+                {paidColLabel}
+              </label>
             </th>
             <th className="px-2 py-1.5"></th>
           </tr>
@@ -808,11 +1002,24 @@ function LogsTable({
                   />
                 </td>
                 <td className="px-2 py-1.5 text-center">
-                  {l.is_paid ? (
-                    <Pill tone="success">완료</Pill>
-                  ) : (
-                    <Pill tone="warning">대기</Pill>
-                  )}
+                  <input
+                    type="checkbox"
+                    aria-label={`${invoiceColLabel} 완료`}
+                    title={`${invoiceColLabel} 완료`}
+                    className="h-4 w-4 cursor-pointer rounded border-border accent-foreground"
+                    checked={s.is_invoiced}
+                    onChange={(e) => updateField(l.id, 'is_invoiced', e.target.checked)}
+                  />
+                </td>
+                <td className="px-2 py-1.5 text-center">
+                  <input
+                    type="checkbox"
+                    aria-label={`${paidColLabel} 완료`}
+                    title={`${paidColLabel} 완료`}
+                    className="h-4 w-4 cursor-pointer rounded border-border accent-foreground"
+                    checked={s.is_paid}
+                    onChange={(e) => updateField(l.id, 'is_paid', e.target.checked)}
+                  />
                 </td>
                 <td className="px-2 py-1.5 text-right">
                   <Link
